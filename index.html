@@ -207,11 +207,13 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
 </header>
 
 <div id="biblioLogin">
-  <div class="biblio-head"><h1>SNAF Cotes V4.9.01</h1><p>Relevé de cotes portes automatiques</p></div>
+  <div class="biblio-head"><h1>SNAF Cotes</h1><p>Relevé de cotes portes automatiques</p></div>
   <div class="biblio-card">
-    <label>Code d'accès</label>
-    <input id="biblioCode" type="text" inputmode="numeric" maxlength="8" placeholder="Entrez votre code" style="text-align:center;font-size:24px;letter-spacing:4px">
-    <button class="biblio-btn primary" onclick="biblioEnterCode()">Entrer</button>
+    <label>Connexion</label>
+    <p style="font-size:14px;color:#455;margin-bottom:12px">Connectez-vous avec votre compte SNAF / Mecaservice pour accéder à vos projets (données synchronisées OneDrive).</p>
+    <button class="biblio-btn primary" id="msLoginBtn" onclick="msalLogin()" style="display:none">Se connecter avec Microsoft</button>
+    <button class="biblio-btn primary" id="msLoginBtnFallback" onclick="msalLogin()">Se connecter avec Microsoft</button>
+    <div id="msLoginWait" style="text-align:center;padding:8px;color:#78828e;font-size:13px;display:none">Connexion en cours…</div>
   </div>
 </div>
 
@@ -5348,5 +5350,8 @@ init();
     </div>
   </div>
 </div>
+<!-- ===== ONEDRIVE : MSAL + couche Graph (chargés APRÈS le script principal) ===== -->
+<script src="msal-browser.min.js"></script>
+<script src="graph-layer.js"></script>
 </body>
 </html>
