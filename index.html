@@ -510,6 +510,9 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
     <div class="toolbar">
       <button class="btn btn-secondary" onclick="ficheFabPDF()">Fiche de fabrication PDF</button>
     </div>
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="devisPdf()">📄 Devis — relevé complet PDF</button>
+    </div>
     <div id="fiche"></div>
   </div>
 
@@ -4803,6 +4806,7 @@ function drawerRemplir() {
     sep('Export PDF');
     item('📄 Relevé PDF (client)', function(){ drawerFermer(); biblioRelevePdf('client'); });
     item('🏭 PDF fournisseur (sans client)', function(){ drawerFermer(); biblioRelevePdf('fournisseur'); });
+    item('📄 Devis — relevé complet PDF', function(){ drawerFermer(); devisPdf(); });
   }
   sep('Actions');
   item('🌙 Mode sombre : ' + (document.body.className.indexOf('dark')>=0 ? 'Activé' : 'Désactivé'), function(){ basculeSombre(); });
@@ -5113,6 +5117,198 @@ function biblioUploadPdf(doc, nom) {
   try { reader.readAsDataURL(blob); } catch(e) {}
 }
 window.biblioUploadPdf = biblioUploadPdf;
+
+/* ============ DEVIS PDF — RELEVÉ COMPLET (tous équipements) ============
+   Génère un PDF portrait A4 : en-tête chantier + UNE PAGE PAR équipement
+   (portes automatiques puis équipements génériques), chacune avec le schéma
+   capturé + un récap textuel des cotes. Téléchargement direct (doc.save),
+   sans appel réseau et sans toucher aux sauvegardes. */
+function devisPdf() {
+  // Capture l'état courant pour le restaurer à la fin
+  var etatPortes = (typeof portes !== 'undefined') ? JSON.parse(JSON.stringify(portes)) : [];
+  var etatCourant = current;
+  var etatEquip = JSON.parse(JSON.stringify(equipContenu || { type: 'porte', champs: {} }));
+  var etatElements = (typeof biblio !== 'undefined' && biblio.elements) ? JSON.parse(JSON.stringify(biblio.elements)) : [];
+
+  try {
+    var doc = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    var W = doc.internal.pageSize.getWidth();
+    var H = doc.internal.pageSize.getHeight();
+    var M = 12; // marge
+
+    // En-tête chantier (page 1)
+    var g = function(id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; };
+    var client = g('client') || (biblio && biblio.chantier && biblio.chantier.client) || '';
+    var lieu = g('lieu') || (biblio && biblio.chantier && biblio.chantier.lieu) || '';
+    var date = g('date') || '';
+    var ref = (biblio && (biblio.ref || biblio.id)) || '';
+    var notes = g('notes') || (biblio && biblio.chantier && biblio.chantier.notes) || '';
+    var mail = g('mailContact') || (biblio && biblio.chantier && biblio.chantier.mailContact) || '';
+    var y = 14;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+    doc.text('SNAF Cotes — Relevé de cotes', W / 2, y, { align: 'center' }); y += 7;
+    doc.setFontSize(11);
+    doc.text((client || '') + (lieu ? ' - ' + lieu : ''), W / 2, y, { align: 'center' }); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    if (ref) { doc.text('Référence : ' + ref, M, y); y += 5; }
+    if (date) { doc.text('Date : ' + date, M, y); y += 5; }
+    if (mail) { doc.text('Mail contact : ' + mail, M, y); y += 5; }
+    y += 2;
+
+    var liste = [];
+    // 1) Portes automatiques
+    (etatPortes || []).forEach(function(p, i) {
+      liste.push({ type: 'porte', idx: i, data: p });
+    });
+    // 2) Équipements génériques
+    (etatElements || []).forEach(function(el, i) {
+      if (el && el.type) liste.push({ type: el.type, idx: i, data: el });
+    });
+
+    if (!liste.length) {
+      doc.text('Aucun équipement dans ce relevé.', M, y);
+    }
+
+    var pageCourante = 0;
+    for (var n = 0; n < liste.length; n++) {
+      var it = liste[n];
+      if (pageCourante > 0) { doc.addPage(); y = 14; } else { y = Math.max(y + 2, 26); }
+      pageCourante++;
+      var titre = '';
+      var img = null;
+      var recap = [];
+
+      if (it.type === 'porte') {
+        // Restaure la porte sur le canvas principal #cv puis génère le schéma
+        // (draw() direct pour éviter les alert() de generer() pendant la boucle)
+        applyPorte(it.data);
+        try {
+          if ((num('passL') || num('baieL')) && typeof draw === 'function') draw();
+        } catch(e) {}
+        titre = '🚪 Porte ' + (it.idx + 1) + (it.data.ref ? ' - ' + it.data.ref : '');
+        var cv1 = document.getElementById('cv');
+        if (cv1) {
+          try { img = cv1.toDataURL('image/jpeg', 0.92); } catch(e) { img = null; }
+        }
+        // Récap lisible : type, série, baie/passage/caisson, vantaux, vitrage/couleur
+        try {
+          var cfg = t();
+          var serie = g('serie') || '-';
+          var vitrage = g('vitrage') || '-';
+          var couleur = g('couleur') || '-';
+          var rail = document.getElementById('railSolChk') && document.getElementById('railSolChk').checked ? 'encastré' : 'non (guide I30)';
+          if (cfg && cfg.label) recap.push('Type : ' + cfg.label);
+          recap.push('Série : ' + serie);
+          if (num('baieL') || num('baieH')) recap.push('Baie : ' + (num('baieL') || '-') + ' x ' + (num('baieH') || '-') + ' mm');
+          if (num('passL') || num('passH')) recap.push('Passage : ' + (num('passL') || '-') + ' x ' + (num('passH') || '-') + ' mm');
+          var cais = (typeof longueurCaisson === 'function') ? longueurCaisson() : null;
+          if (cais !== null && cais !== undefined) recap.push('Caisson : ' + cais + ' mm');
+          if (state && state.imposte) recap.push('Imposte : ' + (g('impH') || '?') + ' mm');
+          if (state && state.fixes && state.fixes.length) recap.push('Fixes : ' + state.fixes.length);
+          if (state && state.vantaux && state.vantaux.length) recap.push('Vantaux : ' + state.vantaux.join(' + '));
+          if (vitrage) recap.push('Vitrage : ' + vitrage);
+          if (couleur) recap.push('Couleur : ' + couleur);
+          recap.push('Rail au sol : ' + rail);
+          var dets = (typeof detectionsListe === 'function') ? detectionsListe() : [];
+          if (dets.length) recap.push('Détections : ' + dets.join(' + '));
+          var opts = (typeof optionsListe === 'function') ? optionsListe() : [];
+          if (opts.length) recap.push('Options : ' + opts.join(', '));
+          var accs = (typeof accessoiresListe === 'function') ? accessoiresListe() : [];
+          if (accs.length) recap.push('Accessoires : ' + accs.join(', '));
+          var livr = g('livraison');
+          if (livr) recap.push('Livraison + pose : ' + livr);
+        } catch(e) {}
+      } else {
+        // Équipement générique : dessine sur le canvas dédié via equipDessiner
+        var typeEq = it.type;
+        equipContenu = { type: typeEq, champs: (it.data && it.data.champs) ? JSON.parse(JSON.stringify(it.data.champs)) : {} };
+        titre = ((EQUIPEMENTS[typeEq] && EQUIPEMENTS[typeEq].label) || typeEq) + (it.data.champs && it.data.champs.ref ? ' - ' + it.data.champs.ref : '');
+        var cvEq = document.getElementById('equipCanvas');
+        if (cvEq && typeof equipDessiner === 'function') {
+          try { equipDessiner(typeEq); img = cvEq.toDataURL('image/jpeg', 0.92); } catch(e) { img = null; }
+        }
+        // Récap via la config EQUIPEMENTS (libellés FR) en excluant notes et champs vides
+        var cfgEq = EQUIPEMENTS[typeEq];
+        if (cfgEq && cfgEq.champs) {
+          cfgEq.champs.forEach(function(f) {
+            var v = (it.data.champs && it.data.champs[f.k] != null) ? it.data.champs[f.k] : '';
+            if (f.k === 'notes') return;
+            if (v === '' || v === null || v === undefined) return;
+            var label = f.l.replace(/ \(mm\)$| \(m\)$/, '');
+            recap.push(label + ' : ' + v + (/(mm|m)$/.test(f.l) && !/mm$/.test(String(v)) ? ' mm' : ''));
+          });
+        }
+      }
+
+      // Titre de l'équipement
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text(String(titre), M, y); y += 6;
+
+      // Schéma (image) — largeur max 130, hauteur ajustée
+      if (img) {
+        try {
+          var iw = 130, ih = 0;
+          var tmp = new Image();
+          tmp.src = img;
+          ih = iw * (tmp.height / tmp.width);
+          if (ih > 120) { ih = 120; iw = ih * (tmp.width / tmp.height); }
+          var ix = M + (W - 2 * M - iw) / 2;
+          doc.addImage(img, 'JPEG', ix, y, iw, ih);
+          y += ih + 5;
+        } catch(e) {}
+      }
+
+      // Récap textuel (wrap)
+      if (recap.length) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        doc.text('Caractéristiques', M, y); y += 5;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+        var bloc = recap.join('   •   ');
+        var lignes = doc.splitTextToSize(bloc, W - 2 * M);
+        var maxY = H - 12;
+        for (var li = 0; li < lignes.length; li++) {
+          if (y > maxY) { doc.addPage(); y = 14; }
+          doc.text(lignes[li], M, y); y += 5;
+        }
+      }
+      // Notes si présentes
+      var noteEq = (it.type === 'porte') ? g('notes') : (it.data.champs && it.data.champs.notes);
+      if (noteEq) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5);
+        var nl = doc.splitTextToSize('Notes : ' + noteEq, W - 2 * M);
+        for (var ni2 = 0; ni2 < nl.length; ni2++) {
+          if (y > H - 12) { doc.addPage(); y = 14; }
+          doc.text(nl[ni2], M, y); y += 4.5;
+        }
+      }
+    }
+
+    // Pied de page : compteur
+    var pages = doc.internal.getNumberOfPages();
+    for (var p2 = 1; p2 <= pages; p2++) {
+      doc.setPage(p2);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text('SNAF Cotes — Relevé ' + (ref ? ref : '') + ' — page ' + p2 + '/' + pages, W / 2, H - 6, { align: 'center' });
+    }
+
+    var nomFichier = (client || 'releve').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    doc.save('Devis_' + nomFichier + '.pdf');
+  } finally {
+    // Restaure l'état (portes, current, équipement courant, biblio.elements)
+    try {
+      if (typeof portes !== 'undefined' && etatPortes.length) {
+        portes = etatPortes;
+        current = etatCourant;
+        if (typeof applyPorte === 'function') applyPorte(portes[current]);
+        if (typeof refreshPorteBar === 'function') refreshPorteBar();
+        if (typeof draw === 'function' && (num('passL') || num('baieL'))) draw();
+      }
+      equipContenu = etatEquip;
+      if (typeof biblio !== 'undefined' && biblio.elements) biblio.elements = etatElements;
+    } catch(e) {}
+  }
+}
+window.devisPdf = devisPdf;
 
 function biblioChangerStatut(st) {
   if (!biblio.id) return;
