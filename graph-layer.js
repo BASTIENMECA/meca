@@ -194,20 +194,45 @@
   }
 
   // Traite le retour de redirection OAuth (une seule fois)
+  // Restaure d'abord une session existante (cache localStorage MSAL) : quand on
+  // rouvre l'appli normalement, on reconnecte immédiatement SANS popup ni écran
+  // de login. handleRedirectPromise ne sert que pour le vrai retour OAuth.
   function _handleRedirect() {
     if (_redirectHandled) return;
     var inst = _msalInit();
     if (!inst) return;
     _redirectHandled = true;
+    var acc = inst.getAllAccounts()[0];
+    if (acc && !window.location.hash) {
+      // Session en cache : restauration silencieuse (pas de popup bloquante)
+      _account = acc;
+      _ensureToken().then(function () {
+        return _connecter(acc);
+      }).catch(function () {
+        // Token silencieux impossible -> on laisse handleRedirectPromise tenter,
+        // sinon écran de connexion.
+        inst.handleRedirectPromise().then(function (res) {
+          if (res && res.account) {
+            _appliquerCompte(res.account, res.accessToken, res.expiresIn);
+            return _connecter(res.account);
+          }
+          afficherLogin();
+          return null;
+        }).catch(function () {
+          afficherLogin();
+        });
+      });
+      return;
+    }
     inst.handleRedirectPromise().then(function (res) {
       if (res && res.account) {
         _appliquerCompte(res.account, res.accessToken, res.expiresIn);
         return _connecter(res.account);
       }
-      var acc = inst.getAllAccounts()[0];
-      if (acc) {
-        _account = acc;
-        return _ensureToken().then(function () { return _connecter(acc); });
+      var acc2 = inst.getAllAccounts()[0];
+      if (acc2) {
+        _account = acc2;
+        return _ensureToken().then(function () { return _connecter(acc2); });
       }
       afficherLogin();
       return null;
