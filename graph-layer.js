@@ -183,14 +183,11 @@
   function msalLogin() {
     var inst = _msalInit();
     if (!inst) { if (typeof biblioToast === 'function') biblioToast('Bibliothèque de connexion absente'); return; }
-    var acc = inst.getAllAccounts()[0];
-    if (acc) {
-      _account = acc;
-      _ensureToken().then(function () { return _connecter(acc); })
-        .catch(function () { deconnecter(); });
-      return;
-    }
-    inst.loginRedirect({ scopes: CONFIG.scopes });
+    // Clic EXPLICITE sur « Se connecter » : on affiche TOUJOURS l'écran Microsoft
+    // (choix du compte) même si un compte traîne en cache sur cet appareil —
+    // sinon MSAL tente un flux silencieux et l'utilisateur ne voit jamais la
+    // page de connexion (symptôme : « accès refusé » immédiat après le clic).
+    inst.loginRedirect({ scopes: CONFIG.scopes, prompt: 'select_account' });
   }
 
   // Traite le retour de redirection OAuth (une seule fois)
