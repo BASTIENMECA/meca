@@ -21,7 +21,7 @@
     tenant: '3d854a15-694a-4818-b60b-a134457b63d4',
     driveId: 'b!TPSmx6V9fUG5DiB27ODQajb0UpCc3LxKuyGg1gvo1QTzF6UPkQ-VR7dO0CV-PPKY',
     racineId: '015BFCG4PCD6EQ5R2ZN5H2GDYQXTBKVIFS',
-    scopes: ['Files.ReadWrite', 'User.Read'],
+    scopes: ['Files.ReadWrite', 'Files.ReadWrite.All', 'User.Read'],
     users: [
       { emails: ['bastien.blanc@mecaservice.fr', 'bastien.blanc@snaf83.fr', 'bastien.blanc13@gmail.com'], initials: 'BB', role: 'admin', canDelete: true },
       { emails: ['nicolas.racenet@snaf83.fr'], initials: 'NR', role: 'NR', canDelete: false },
