@@ -101,9 +101,11 @@
         else if (r.status === 204) data = {};
         else data = txt;
         if (!r.ok) {
-          var msg = (data && data.error && (data.error.message || data.error.code)) || ('Erreur Graph ' + r.status);
-          var e = _err(r.status === 404 ? 404 : r.status, String(msg).slice(0, 200));
+          var code = (data && data.error && data.error.code) || '';
+          var msg = (data && data.error && data.error.message) || ('Erreur Graph ' + r.status);
+          var e = _err(r.status === 404 ? 404 : r.status, ('Graph ' + r.status + (code ? ' ' + code : '') + ' — ' + String(msg)).slice(0, 300));
           e.raw = data;
+          e.url = path;
           throw e;
         }
         return data;
@@ -683,7 +685,9 @@
   function _msgErreur(e) {
     // Les erreurs MSAL/Graph utilisent .message/.errorMessage ; nos _err utilisent .msg
     if (!e) return 'Erreur inconnue';
-    return String(e.msg || e.errorMessage || e.message || ('Erreur ' + (e.status || ''))).trim() || 'Erreur inconnue';
+    var base = String(e.msg || e.errorMessage || e.message || ('Erreur ' + (e.status || ''))).trim() || 'Erreur inconnue';
+    if (e && e.url) return base + ' [' + e.url + ']';
+    return base;
   }
 
   function biblioCharger() {
