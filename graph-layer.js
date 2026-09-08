@@ -812,6 +812,35 @@
   window.biblioUploadPdf = biblioUploadPdf;
   window.biblioSurveillerReseau = biblioSurveillerReseau;
   window.msalLogin = msalLogin;
+
+  // ===== OUVERTURE DOSSIER : PAS DE FAUX CONFLIT EN LIGNE =====
+  // L'ancienne logique (biblioAppliquerRevele dans l'index) compare le backup
+  // local (snaf_backup_<id>) avec les données serveur par JSON.stringify : avec
+  // OneDrive, les deux ne sont JAMAIS identiques (le _rev / métadonnées évoluent
+  // à chaque écriture) -> modale « garder la version locale ou serveur » à tort,
+  // même seul et en ligne. Ici : si on est EN LIGNE (biblio.on) et qu'aucune
+  // modification locale n'est en attente (file vide), on applique directement la
+  // version OneDrive (source de vérité) SANS demander. Les vrais conflits
+  // multi-utilisateurs restent gérés à l'ENREGISTREMENT (409 + modale).
+  var _biblioAppliquerReleveOrig = window.biblioAppliquerReleve;
+  window.biblioAppliquerReleve = function (id, data, opts) {
+    opts = opts || {};
+    if (!opts.fromChooser && biblio && biblio.on) {
+      var enAttente = false;
+      try {
+        var q = JSON.parse(localStorage.getItem('snaf_offline_queue') || '[]');
+        enAttente = q.indexOf(id) >= 0;
+      } catch (e) {}
+      if (!enAttente) {
+        opts.fromChooser = true; // saute la modale de conflit
+        // Met aussi à jour le backup local avec la version OneDrive fraîche
+        // (le cache hors-ligne doit refléter la source de vérité)
+        try { if (typeof biblioSauverBackup === 'function' && data) biblioSauverBackup(id, data); } catch (e) {}
+      }
+    }
+    return _biblioAppliquerReleveOrig(id, data, opts);
+  };
+
   window.snafGraphDebug = function () {
     return {
       account: _account ? _account.username : null,
