@@ -683,6 +683,12 @@
   }
   function biblioEnterCode() { msalLogin(); }
 
+  function _msgErreur(e) {
+    // Les erreurs MSAL/Graph utilisent .message/.errorMessage ; nos _err utilisent .msg
+    if (!e) return 'Erreur inconnue';
+    return String(e.msg || e.errorMessage || e.message || ('Erreur ' + (e.status || ''))).trim() || 'Erreur inconnue';
+  }
+
   function biblioCharger() {
     biblioAfficher('login');
     var st = biblioEl('biblioStatus');
@@ -699,7 +705,7 @@
     }).catch(function (err) {
       var locale = [];
       try { locale = biblioListeHorsLigne(); } catch (e) {}
-      if (locale && locale.length) {
+      if (locale && locale.length && !(err && err.status === 403)) {
         biblio.on = false;
         if (!biblio.user) biblio.user = { initials: '?', role: 'NR', canDelete: false };
         biblio.liste = locale;
@@ -708,7 +714,10 @@
         biblioAfficherListe();
         return;
       }
-      biblioToast((err && err.msg) || 'Hors-ligne — réessayez quand le réseau revient');
+      // Afficher la VRAIE cause (403/consentement/compte) au lieu d'un faux « hors-ligne »
+      var cause = _msgErreur(err);
+      biblioToast(cause);
+      try { console.error('[SNAF] Échec chargement:', err); } catch (e) {}
       afficherLogin();
     });
   }
