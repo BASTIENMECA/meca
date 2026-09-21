@@ -31,7 +31,8 @@
 
   var MAP_STATUT = { brouillon: 'Brouillon', devis: 'Devis', commande: 'Commande', fabrication: 'Fabrication', pose: 'Installé' };
   var STATUT_CLE = { Brouillon: 'brouillon', Devis: 'devis', Commande: 'commande', Fabrication: 'fabrication', 'Installé': 'pose' };
-  var NR_STATUTS_OK = { commande: 1, fabrication: 1, pose: 1 };
+  var NR_STATUTS_OK = null;   /* null = AUCUN filtrage : NR voit TOUS les dossiers
+                                 (demande Bastien 21/09/2026 — avant : commande/fabrication/pose) */
   var GRAPH = 'https://graph.microsoft.com/v1.0';
 
   var _msal = null, _account = null, _token = null, _tokenExp = 0;
@@ -78,6 +79,27 @@
     try { return JSON.parse(txt); } catch (e) { return null; }
   }
   function _clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  // Archive locale (récupérable) d'une version remplacée automatiquement.
+  // Garde au maximum 10 archives par préfixe pour ne pas saturer le navigateur.
+  function _archiverVersion(prefix, rid, obj) {
+    try {
+      localStorage.setItem(prefix + rid + '_' + Date.now(), JSON.stringify(obj));
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(prefix) === 0) keys.push(k);
+      }
+      keys.sort();
+      while (keys.length > 10) { try { localStorage.removeItem(keys.shift()); } catch (e) {} }
+    } catch (e) {}
+  }
+
+  // Fraîcheur d'un relevé : date d'enregistrement (posée à chaque écriture).
+  function _fraicheur(d) {
+    if (!d) return 0;
+    return Date.parse(d.dernierDate || '') || 0;
+  }
 
   // Requête Graph authentifiée. binaire=true -> body envoyé tel quel, réponse en texte.
   function _graph(method, path, body, isBinary) {
@@ -365,14 +387,15 @@
       var out = [];
       Object.keys(byId).forEach(function (rid) {
         var info = byId[rid];
-        if (role === 'NR' && !NR_STATUTS_OK[info.statut]) return;
+        if (NR_STATUTS_OK && role === 'NR' && !NR_STATUTS_OK[info.statut]) return;
         var d = info.data || {};
         var ch = d.chantier || {};
         var nbPortes = (d.portes || []).length +
           ((d.elements || []).filter(function (e) { return e && e.type && e.type !== 'porte' && e.type !== 'chassis'; }).length);
+        var titre = String(ch.titre || d.titre || '').trim();
         out.push({
           id: rid,
-          nom: ch.client ? (ch.client + (ch.lieu ? ' - ' + ch.lieu : '')) : info.name,
+          nom: titre || (ch.client ? (ch.client + (ch.lieu ? ' - ' + ch.lieu : '')) : info.name),
           client: ch.client || '',
           lieu: ch.lieu || '',
           ref: d.ref || '',
@@ -391,7 +414,7 @@
     return _findDossier(rid).then(function (info) {
       if (!info) throw _err(404, 'Dossier introuvable');
       var role = (biblio.user && biblio.user.role) || 'BB';
-      if (role === 'NR' && !NR_STATUTS_OK[info.statut]) throw _err(403, 'Accès refusé');
+      if (NR_STATUTS_OK && role === 'NR' && !NR_STATUTS_OK[info.statut]) throw _err(403, 'Accès refusé');
       // Relire le JSON à jour (toujours frais au moment de l'ouverture)
       return _graph('GET', _item(info.folderId) + ':/releve.json:/content').then(function (txt) {
         var data = _parseJsonDoc(txt);
@@ -480,11 +503,16 @@
           }).catch(function () { return null; });
 
         return lire.then(function (distant) {
-          // CONFLIT : le client envoie une révision périmée
-          if (!force && !estNouveau && data._rev && distant && distant._rev) {
-            if (data._rev < distant._rev) {
-              throw _err(409, 'conflit', { details: _diff(data, distant) });
-            }
+          // CONFLIT (révision périmée) — RÉSOLUTION AUTOMATIQUE (Bastien 21/09/2026).
+          // PLUS DE MODALE : l'enregistrement en cours porte l'édition la plus récente,
+          // donc on garde les données locales. La version serveur remplacée est archivée
+          // dans le navigateur (récupérable) et annoncée par un toast.
+          if (!force && !estNouveau && data._rev && distant && distant._rev && data._rev < distant._rev) {
+            _archiverVersion('snaf_auto_', rid, distant);
+            force = true;
+            try {
+              if (typeof biblioToast === 'function') biblioToast('Enregistré — version serveur archivée (la plus récente conservée)');
+            } catch (e) {}
           }
           var d2 = _clone(data);
           delete d2._force;
@@ -835,15 +863,64 @@
         var q = JSON.parse(localStorage.getItem('snaf_offline_queue') || '[]');
         enAttente = q.indexOf(id) >= 0;
       } catch (e) {}
-      if (!enAttente) {
-        opts.fromChooser = true; // saute la modale de conflit
-        // Met aussi à jour le backup local avec la version OneDrive fraîche
-        // (le cache hors-ligne doit refléter la source de vérité)
-        try { if (typeof biblioSauverBackup === 'function' && data) biblioSauverBackup(id, data); } catch (e) {}
+      var local = null;
+      try { local = (typeof biblioLocalData === 'function') ? biblioLocalData(id) : null; } catch (e) {}
+      // 21/09/2026 — PLUS DE MODALE en ligne, la version la plus récente gagne :
+      //  - modifs locales non poussées (file) et pas plus anciennes que le serveur -> on garde le LOCAL
+      //  - sinon (serveur strictement plus récent, ou simple cache) -> on prend ONEDRIVE
+      if (enAttente && local && _fraicheur(local) >= _fraicheur(data)) {
+        _archiverVersion('snaf_conflit_serveur_', id, data);
+        try { local._force = true; biblioSauverBackup(id, local); } catch (e) {}
+        try { biblioLocalEnqueue(id); biblioSync(); } catch (e) {}
+        opts.fromChooser = true;
+        return _biblioAppliquerReleveOrig(id, local, opts);
       }
+      if (enAttente) {
+        _archiverVersion('snaf_conflit_local_', id, local);
+        try { biblioLocalMarquerPropre(id); } catch (e) {}
+        try { if (typeof biblioToast === 'function') biblioToast('Version la plus recente chargee depuis OneDrive'); } catch (e) {}
+      }
+      opts.fromChooser = true; // saute la modale de conflit
+      // Met aussi à jour le backup local avec la version OneDrive fraîche
+      // (le cache hors-ligne doit refléter la source de vérité)
+      try { if (typeof biblioSauverBackup === 'function' && data) biblioSauverBackup(id, data); } catch (e) {}
     }
     return _biblioAppliquerReleveOrig(id, data, opts);
   };
+
+  // RENOMMER UN PROJET (appui long sur la liste — demande Bastien 21/09/2026).
+  // Écrit le titre dans releve.json (chantier.titre) ET renomme le dossier OneDrive.
+  function biblioRenommerProjet(id, titre) {
+    titre = _cleanName(titre);
+    if (!id) return Promise.reject(_err(400, 'Dossier inconnu'));
+    if (!titre) return Promise.reject(_err(400, 'Titre vide'));
+    var role = (biblio.user && biblio.user.role) || 'BB';
+    if (role !== 'admin') return Promise.reject(_err(403, 'Réservé à Bastien'));
+    return _findDossier(id).then(function (info) {
+      if (!info) throw _err(404, 'Dossier introuvable');
+      return _graph('GET', _item(info.folderId) + ':/releve.json:/content').then(function (txt) {
+        var data = _parseJsonDoc(txt) || {};
+        data.chantier = data.chantier || {};
+        data.chantier.titre = titre;
+        data.id = id;
+        data._rev = (data._rev || 0) + 1;
+        data.dernierPar = (biblio.user && biblio.user.initials) || '?';
+        data.dernierDate = new Date().toISOString();
+        data._force = true;
+        return _ecrireReleve(info.folderId, data).then(function () {
+          // Renommer aussi le dossier OneDrive (nom du dossier = ce que voient les autres)
+          return _graph('PATCH', _item(info.folderId), { name: titre })
+            .catch(function () { return null; })
+            .then(function () {
+              _cache.ts = 0;
+              try { biblioSauverBackup(id, data); } catch (e) {}
+              return titre;
+            });
+        });
+      });
+    });
+  }
+  window.biblioRenommerProjet = biblioRenommerProjet;
 
   window.snafGraphDebug = function () {
     return {

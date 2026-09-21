@@ -4245,6 +4245,28 @@ function biblioStatutBadge(st) {
   return '<span style="display:inline-block;background:' + c + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:10px;margin-top:5px">' + biblioStatutLabel(st) + '</span>';
 }
 
+/* RENOMMER UN PROJET (appui long sur la liste — demande Bastien 21/09/2026).
+   La couche OneDrive (graph-layer.js) fournit sa propre version : elle écrit le
+   titre dans releve.json ET renomme le dossier OneDrive. Ce fallback sert à
+   l'ancienne appli (serveur) : il enregistre simplement le titre dans le relevé. */
+if (typeof window.biblioRenommerProjet !== 'function') {
+  window.biblioRenommerProjet = function(id, titre) {
+    titre = String(titre || '').trim();
+    if (!id) return Promise.reject(new Error('Dossier inconnu'));
+    if (!titre) return Promise.reject(new Error('Titre vide'));
+    if (!biblio.user || biblio.user.role !== 'admin') return Promise.reject(new Error('Réservé à Bastien'));
+    return biblioApi('/api/releves/' + id).then(function(data) {
+      data = data || {};
+      data.chantier = data.chantier || {};
+      data.chantier.titre = titre;
+      if (biblio._rev) data._rev = biblio._rev;
+      data._force = true;
+      return biblioApi('/api/releves/' + id, { method: 'PUT', body: JSON.stringify(data) })
+        .then(function() { return titre; });
+    });
+  };
+}
+
 function biblioAfficherListe() {
   var box = biblioEl('biblioList');
   if (!box) return;
@@ -4314,7 +4336,44 @@ function biblioAfficherListe() {
     if (nb) { var b2 = document.createElement('span'); b2.className = 'badge'; b2.textContent = nb + ' porte(s)'; sub.appendChild(b2); }
     div.appendChild(nom);
     div.appendChild(sub);
-    div.onclick = (function(id) { return function() { biblioOuvrirReleve(id); }; })(r.id);
+    div.onclick = (function(id) { return function() {
+      if (div._lpVient) { div._lpVient = false; return; }   // ne pas ouvrir juste après un appui long
+      biblioOuvrirReleve(id);
+    }; })(r.id);
+    /* APPUI LONG (650 ms) SUR LE PROJET = RENOMMER (réservé à Bastien / admin) */
+    if (biblio.user && biblio.user.role === 'admin' && typeof biblioRenommerProjet === 'function') {
+      div.style.webkitUserSelect = 'none'; div.style.userSelect = 'none';
+      try { div.style.webkitTouchCallout = 'none'; } catch (e) {}
+      var lpTimer = null;
+      var lpStop = function() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+      var lpGo = function() {
+        lpStop();
+        div._lpVient = true;
+        setTimeout(function() { div._lpVient = false; }, 900);
+        try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+        var actuel = r.nom || r.client || '';
+        var nv = prompt('Nouveau nom du projet :', actuel);
+        if (nv === null) return;
+        nv = String(nv).trim();
+        if (!nv || nv === actuel) return;
+        biblioRenommerProjet(r.id, nv).then(function() {
+          r.nom = nv;
+          biblioToast('Projet renommé : ' + nv);
+          biblioAfficherListe();
+          setTimeout(function() { try { biblioCharger(); } catch (e) {} }, 400);
+        }).catch(function(err) {
+          biblioToast((err && (err.msg || err.message)) || 'Renommage impossible');
+        });
+      };
+      div.addEventListener('touchstart', function() { lpStop(); lpTimer = setTimeout(lpGo, 650); }, { passive: true });
+      div.addEventListener('touchend', lpStop);
+      div.addEventListener('touchmove', lpStop);
+      div.addEventListener('touchcancel', lpStop);
+      div.addEventListener('mousedown', function() { lpStop(); lpTimer = setTimeout(lpGo, 650); });
+      div.addEventListener('mouseup', lpStop);
+      div.addEventListener('mouseleave', lpStop);
+      div.addEventListener('contextmenu', function(e) { e.preventDefault(); lpGo(); });
+    }
     box.appendChild(div);
   });
 }
