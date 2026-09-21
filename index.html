@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SNAF Cotes V4.9.01 — Relevé de cotes portes automatiques</title>
+<title>SNAF Cotes V4.10.00 — Relevé de cotes portes automatiques</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#1e7d46">
   <link rel="icon" href="icon-192.png">
@@ -202,12 +202,12 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
 </head>
 <body>
 <header>
-  <h1>SNAF COTES V4.9.01</h1>
+  <h1>SNAF COTES V4.10.00</h1>
   <p>Prise de cotes portes automatiques — coulissantes et telescopiques</p>
 </header>
 
 <div id="biblioLogin">
-  <div class="biblio-head"><h1>SNAF Cotes</h1><p>Relevé de cotes portes automatiques</p></div>
+  <div class="biblio-head"><h1>SNAF Cotes V4.10.00</h1><p>Relevé de cotes portes automatiques</p></div>
   <div class="biblio-card">
     <label>Connexion</label>
     <p style="font-size:14px;color:#455;margin-bottom:12px">Connectez-vous avec votre compte SNAF / Mecaservice pour accéder à vos projets (données synchronisées OneDrive).</p>
@@ -468,6 +468,9 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
     <label style="margin-top:8px">Toles d'habillage (plat / corniere / U)</label>
     <div id="tolesBox"></div>
     <button class="btn btn-secondary btn-small" onclick="addTole()">+ Ajouter une tole</button>
+    <label style="margin-top:8px">Tubes sur la porte</label>
+    <div id="tubesBox"></div>
+    <button class="btn btn-secondary btn-small" onclick="addTube()">+ Ajouter un tube</button>
     <label style="margin-top:8px">Notes</label>
     <input id="notes" placeholder="Largueur de profil, poutre autoportante, etc.">
     <div class="hint">Selecteur, boitier vert, KIT et attaches sont ajoutes automatiquement selon le type de porte. Radars repris des Detections.</div>
@@ -1005,6 +1008,8 @@ var TYPES = {
 var state = {
   type: 'dsta',
   fixes: [],
+  toles: [],
+  tubes: [],
   imposte: false,
   impH: null,
   caisModifG: false, caisG: null,
@@ -1057,6 +1062,7 @@ function snapshotPorte() {
     baieLocked: state.baieLocked,
     serie: $('serie').value, vitrage: $('vitrage').value, couleur: $('couleur').value, teleQty: $('teleQty').value, raidisseurLg: $('raidisseurLg').value,
     raidisseur: $('raidisseur').value, railSol: $('railSolChk').checked, toles: JSON.parse(JSON.stringify(state.toles)),
+    tubes: JSON.parse(JSON.stringify(state.tubes || [])),
     notes: $('notes').value
   };
 }
@@ -1091,6 +1097,7 @@ function applyPorte(snap) {
   toggleRaidisseurLg();
   $('railSolChk').checked = !!snap.railSol;
   state.toles = JSON.parse(JSON.stringify(snap.toles || [])); renderToles();
+  state.tubes = JSON.parse(JSON.stringify(snap.tubes || [])); renderTubes();
   $('notes').value = snap.notes || '';
   var btns = document.querySelectorAll('#detectBox .chip');
   for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
@@ -1135,7 +1142,7 @@ function resetFormPorte() {
     caisModifG: false, caisG: null, caisModifD: false, caisD: null,
     caisHModif: false, montage: 'entreMurs',
     detections: ['Radars IXIO DT1'], radarQty: '2', radarQtyST: '1', magicQty: '1', equerre: false, options: ['Verrou'],
-    vitrage: '', couleur: '', raidisseur: '0', raidisseurLg: '', railSol: false, toles: [],
+    vitrage: '', couleur: '', raidisseur: '0', raidisseurLg: '', railSol: false, toles: [], tubes: [],
     notes: '', chassisLie: true,
     accessoires: [], livraison: '', serie: 'Twenty', teleQty: '1', baieLocked: false
   });
@@ -1836,6 +1843,32 @@ function delTole(i) { state.toles.splice(i, 1); renderToles(); updateCalc(); }
 function setTole(i, k, v) { state.toles[i][k] = parseInt(v) || 0; updateCalc(); }
 function setToleType(i, v) { state.toles[i].type = v; renderToles(); updateCalc(); }
 
+/* ================= TUBES SUR LA PORTE (demande Bastien 21/09/2026) =================
+   Liste deroulante de tubes + longueur + quantite ; les tubes sont repris
+   dans le tableau de decoupe de la fiche de fabrication. */
+var TUBES_DIMS = ['50*50', '120*40', '80*40', '40*40', '100*50', '100*40', '120*50', '45*45'];
+function renderTubes() {
+  var h = '';
+  for (var i = 0; i < state.tubes.length; i++) {
+    var tb = state.tubes[i];
+    var opts = '';
+    for (var d = 0; d < TUBES_DIMS.length; d++) {
+      opts += '<option value="' + TUBES_DIMS[d] + '"' + (tb.dim === TUBES_DIMS[d] ? ' selected' : '') + '>' + TUBES_DIMS[d] + '</option>';
+    }
+    h += '<div class="fixe-item"><div class="row">' +
+      '<div style="flex:1"><label class="small">Tube</label><select onchange="setTubeDim(' + i + ', this.value)">' + opts + '</select></div>' +
+      '<div style="flex:1"><label class="small">Longueur (mm)</label><input type="number" inputmode="numeric" value="' + (tb.lg || '') + '" onchange="setTube(' + i + ',\'lg\',this.value)"></div>' +
+      '<div><label class="small">Quantite</label><input type="number" inputmode="numeric" value="' + (tb.qty || 1) + '" onchange="setTube(' + i + ',\'qty\',this.value)"></div>' +
+      '<div><button class="del" onclick="delTube(' + i + ')">X</button></div>' +
+      '</div></div>';
+  }
+  $('tubesBox').innerHTML = h || '<span class="small">Aucun tube.</span>';
+}
+function addTube() { state.tubes.push({ dim: '120*40', lg: 0, qty: 1 }); renderTubes(); updateCalc(); }
+function delTube(i) { state.tubes.splice(i, 1); renderTubes(); updateCalc(); }
+function setTube(i, k, v) { state.tubes[i][k] = parseInt(v) || 0; updateCalc(); }
+function setTubeDim(i, v) { state.tubes[i].dim = v; }
+
 function toggleImposte() {
   state.imposte = $('imposteChk').checked;
   $('imposteBox').style.display = state.imposte ? 'block' : 'none';
@@ -2302,6 +2335,21 @@ function r1(x) { return Math.round(x * 10) / 10; }
    type: 'twenty' | 'fixe' | 'tel' — fixes[] et imposte{ h } ajoutent leurs decoupes ; le RAIL est un profil (non laque) */
 function fabRows(o) {
   var out = { lignes: [], vantaux: [], vantail: 0, hv: 0, vitrageL: null, vitrageH: null, chassisL: 0, chassisH: 0, vitrages: [] };
+  /* Raidisseur + tubes ajoutes au tableau de decoupe (demande Bastien 21/09/2026).
+     avecRaid=false pour un chassis fixe (pas de caisson). */
+  function ajouterProfilSup(avecRaid) {
+    if (avecRaid && o.raidisseur && o.raidisseur !== '0' && out.lignes && out.lignes.length) {
+      var rl = o.raidLg || (o.miniMec || 0);
+      if (o.raidisseur === 'Tube 200x50') out.lignes.push(['RAIDISSEUR TUBE 100x50', rl, 2]);
+      else out.lignes.push(['RAIDISSEUR ' + String(o.raidisseur).toUpperCase(), rl, 1]);
+    }
+    var tbs = o.tubes || [];
+    for (var ti = 0; ti < tbs.length; ti++) {
+      var tb = tbs[ti];
+      if (!tb || !tb.dim) continue;
+      out.lignes.push(['TUBE ' + tb.dim, parseInt(tb.lg) || 0, parseInt(tb.qty) || 1]);
+    }
+  }
   if (o.type === 'fixe') {
     var CL = o.baieL || 0, CH = o.baieH || 0;
     out.chassisL = CL; out.chassisH = CH;
@@ -2314,6 +2362,7 @@ function fabRows(o) {
     ];
     out.vitrageL = CL - 55; out.vitrageH = CH - 55;
     out.vitrages.push({ label: 'Vitrage chassis', w: CL - 55, h: CH - 55, traverses: false, remp: false });
+    ajouterProfilSup(false);
     return out;
   }
   var hv = (o.hvBase || 0) + 5;
@@ -2400,6 +2449,7 @@ function fabRows(o) {
     out.lignes.push(['P01587 : HAUT PARCLOSE IMPOSTE', ih - 84, 2]);
     out.vitrages.push({ label: 'Vitrage imposte', w: iw - 55, h: ih - 55, traverses: false, remp: false });
   }
+  ajouterProfilSup(true);
   return out;
 }
 /* PURE END */
@@ -2428,6 +2478,10 @@ function fabData() {
     vitrageTxt: val('vitrage'),
     railEnc: $('railSolChk').checked, miniMec: caisson() || 0
   };
+  /* raidisseur + tubes passes au tableau de decoupe (demande Bastien 21/09/2026) */
+  o.raidisseur = val('raidisseur');
+  o.raidLg = num('raidisseurLg') || 0;
+  o.tubes = state.tubes || [];
   var rows = fabRows(o);
   var refoul = '';
   if (cfg.open === 'fixe') refoul = '';
@@ -2437,6 +2491,7 @@ function fabData() {
   var raid = val('raidisseur');
   return {
     cfg: cfg, PL: PL, PH: PH, cais: cais, hvBase: hvBase, rows: rows,
+    baieL: o.baieL, baieH: o.baieH, raidLg: o.raidLg, tubes: o.tubes,
     vitrage: val('vitrage') || '-',
     teinte: val('couleur') ? 'TEINTE RAL ' + val('couleur').toUpperCase() : 'TEINTE A DEFINIR',
     ref: val('porteRef') || ('Porte ' + (current + 1)),
@@ -2469,8 +2524,10 @@ function fabAccessoires(cfg) {
   L('Equerre pour radar', (!isFixe && has('Radars IXIO DT1') && $('equerre').checked) ? (parseInt(val('radarQty')) || 1) : 0);
   L('Digicode', inOpt('Digicode') ? 1 : 0);
   L('Boitier vert', isFixe ? 0 : 1);
+  L('Selecteur', isFixe ? 0 : 1);
   L('Contacteur à clefs', inOpt('Contact a cle') ? 1 : 0);
-  L('Verrou', inOpt('Verrou') ? 1 : 0);
+  /* pas de verrou sur une partie fixe seule (demande Bastien 21/09/2026) */
+  L('Verrou', (!isFixe && inOpt('Verrou')) ? 1 : 0);
   L('Debrayage exterieur', inOpt('Debrayage exterieur') ? 1 : 0);
   L('Vigik', inOpt('Vigik') ? 1 : 0);
   L('Reprise des anciennes commandes', inOpt('Reprise des anciennes commandes') ? 1 : 0);
@@ -2478,7 +2535,8 @@ function fabAccessoires(cfg) {
   L('Carte batterie', inOpt('Batterie') ? 1 : 0);
   L('Sonnette', inOpt('Sonnette') ? 1 : 0);
   L('Telecommandes', inOpt('Telecommande') ? (parseInt(val('teleQty')) || 1) : 0);
-  L('Guides', (!isFixe && !cfg.tel) ? (cfg.nv >= 2 ? 2 : 1) : 0);
+  /* guides inutiles quand la porte coulisse sur un rail au sol encastre (demande Bastien 21/09/2026) */
+  L('Guides', (!isFixe && !cfg.tel && !$('railSolChk').checked) ? (cfg.nv >= 2 ? 2 : 1) : 0);
   L('Sabot de fermeture', inOpt('Sabot de fermeture') ? 1 : 0);
   L('Magic switch', inOpt('Magic switch') ? (parseInt(val('magicQty')) || 1) : 0);
   if (!isFixe) {
@@ -2612,7 +2670,9 @@ function fabLabelCourt(lib) {
     .replace(/HAUT DE LA PARCLOSE  - 84/g, 'HAUT PARCLOSE -84')
     .replace(/RAIL ENCASTRE \(non laque\)/g, 'RAIL ENCASTRE (non laque)')
     .replace(/RAIL GUIDE I30 \(non laque\)/g, 'RAIL GUIDE I30 (non laque)');
-  return s.length > 42 ? s.slice(0, 42) : s;
+  /* 2e argument optionnel : longueur max (tableau de decoupe agrandi) */
+  var maxLen = (arguments.length > 1 && arguments[1]) ? arguments[1] : 42;
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
 function fabTypeCourt(label) {
@@ -2630,26 +2690,33 @@ function fabTypeCourt(label) {
     .replace('(partie fixe seule)', '(fixe seul)');
 }
 
+/* Fiche de fabrication — RECTO : texte + tableau de decoupe (police agrandie
+   pour le responsable PROD) ; VERSO : schema. Demande Bastien 21/09/2026. */
 function ficheFabPDF() {
   portes[current] = snapshotPorte();
   if (!passage() && !num('baieL')) { alert('Renseigne le passage ou la baie avant de generer la fiche de fabrication.'); return; }
   var nom = (val('client') || 'chantier').replace(/[^a-z0-9]+/gi, '_').toLowerCase();
   var doc = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   var W = doc.internal.pageSize.getWidth();
+  var MX = 12;   /* marge laterale : le texte occupe toute la largeur utile */
   for (var i = 0; i < portes.length; i++) {
     if (i > 0) doc.addPage();
     current = i; applyPorte(portes[i]); generer();
     var d = fabData();
-    var y = 8;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-    doc.text('FICHE DE FABRICATION', W / 2, y, { align: 'center' }); y += 5.5;
-    doc.setFontSize(8.5);
-    doc.text(d.client + (d.lieu ? ' - ' + d.lieu : '') + '  |  Ref : ' + d.ref, W / 2, y, { align: 'center' });
-    /* bandeau du projet : 2 colonnes compactes (TYPE -> RAIL AU SOL) */
-    var py = y + 4;
+
+    /* ==================== RECTO : texte + tableau de decoupe ==================== */
+    var y = 12;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+    doc.text('FICHE DE FABRICATION', W / 2, y, { align: 'center' }); y += 6.5;
+    doc.setFontSize(11.5);
+    doc.text(d.client + (d.lieu ? ' - ' + d.lieu : '') + '   |   Ref : ' + d.ref, W / 2, y, { align: 'center' }); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.text('Porte ' + (i + 1) + ' / ' + portes.length + '   -   ' + new Date().toLocaleDateString('fr-FR'), W / 2, y, { align: 'center' }); y += 5;
+    doc.setLineWidth(0.4); doc.setDrawColor(60); doc.line(MX, y, W - MX, y); y += 6;
+
+    /* bandeau projet : 1 seule colonne, police 10 (lisibilite PROD) */
     var pairs = [];
     pairs.push(['TYPE', fabTypeCourt(d.cfg.label)]);
-    // Cotes de baie en haut de la feuille (demande Bastien)
     if (d.cfg.open !== 'fixe') {
       pairs.push(['LARGEUR DE BAIE', d.baieL ? (d.baieL + ' mm') : '-']);
       pairs.push(['HAUTEUR DE BAIE', d.baieH ? (d.baieH + ' mm') : '-']);
@@ -2666,48 +2733,35 @@ function ficheFabPDF() {
     pairs.push(['LIVRAISON + POSE', d.livraison || '-']);
     pairs.push(['REFOULEMENT', d.refoul || '-']);
     pairs.push(['RAIL AU SOL', d.cfg.open === 'fixe' ? '-' : (d.railSol ? 'encastre' : 'non (guide I30)')]);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    var halfP = Math.ceil(pairs.length / 2);
-    for (var p = 0; p < halfP; p++) {
-      for (var c3 = 0; c3 < 2; c3++) {
-        var pIdx = p + c3 * halfP;
-        if (pIdx >= pairs.length) continue;
-        var px = c3 === 0 ? 10 : 122;
-        var pv = c3 === 0 ? 58 : 162;
-        doc.setFont('helvetica', 'bold'); doc.text(pairs[pIdx][0] + ' :', px, py);
-        doc.setFont('helvetica', 'normal'); doc.text(String(pairs[pIdx][1]), pv, py);
-      }
-      py += 4.2;
+    doc.setFontSize(10);
+    for (var p = 0; p < pairs.length; p++) {
+      doc.setFont('helvetica', 'bold'); doc.text(pairs[p][0] + ' :', MX, y);
+      doc.setFont('helvetica', 'normal'); doc.text(String(pairs[p][1]), MX + 62, y);
+      y += 5.8;
     }
-    py += 1.5;
-    /* case Verification PROD */
+    y += 2;
+    /* case Verification PROD (agrandie) */
     doc.setLineWidth(0.3); doc.setDrawColor(60);
-    doc.rect(10, py - 3.2, 4, 4);
-    doc.setFont('helvetica', 'bold'); doc.text('Verification PROD', 17, py);
-    doc.setFont('helvetica', 'normal');
-    py += 6;
-    /* schema centre, agrandi (pleine largeur utile) */
-    var imgData = $('cv').toDataURL('image/jpeg', 0.92);
-    var imgW = 160;
-    var imgH = imgW * ($('cv').height / $('cv').width);
-    var sTop = py + 1;
-    doc.addImage(imgData, 'JPEG', 25, sTop, imgW, imgH);
-    /* tableau de découpe pleine largeur, 2 colonnes séparées, 1 seule colonne quantité */
-    var ty = Math.max(py + 4, sTop + imgH + 12);
+    doc.rect(MX, y - 3.6, 5, 5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+    doc.text('Verification PROD', MX + 8, y);
+    y += 9;
+
+    /* ---- TABLEAU DE DECOUPE : pleine largeur, 2 colonnes, police agrandie ---- */
     if (d.rows.lignes && d.rows.lignes.length) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
-      doc.text('TABLEAU DE DECOUPE', 10, ty); ty += 4.4;
-      doc.setFontSize(6.8);
-      var colX = [10, 105];
-      var headY = ty;
-      /* case a cocher devant chaque profil (production) : carre 3 mm, libelle decale */
-      var chkSz = 3, chkOf = 4.4;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+      doc.text('TABLEAU DE DECOUPE', MX, y); y += 6.5;
+      var colX = [MX, MX + 96];
+      var headY = y;
+      doc.setFontSize(10.5);
       for (var c = 0; c < 2; c++) {
         doc.setFont('helvetica', 'bold');
-        doc.text('DIMENSION', colX[c] + chkOf, ty); doc.text('LONGUEUR', colX[c] + 70, ty); doc.text('Q', colX[c] + 88, ty);
+        doc.text('DIMENSION', colX[c] + 5, y);
+        doc.text('LONGUEUR', colX[c] + 68, y);
+        doc.text('Q', colX[c] + 88, y);
       }
-      ty += 3.6;
-      doc.setFont('helvetica', 'normal');
+      y += 5.5;
+      doc.setFontSize(9.5);
       var half = Math.ceil(d.rows.lignes.length / 2);
       for (var r2 = 0; r2 < half; r2++) {
         for (var c2 = 0; c2 < 2; c2++) {
@@ -2716,54 +2770,74 @@ function ficheFabPDF() {
           var lg = d.rows.lignes[idx];
           if (lg[0] === '') continue;
           var cx = colX[c2];
-          doc.rect(cx, ty - 3.2, chkSz, chkSz);
-          doc.text(fabLabelCourt(lg[0]), cx + chkOf, ty);
-          doc.text(String(lg[1]), cx + 70, ty);
-          doc.text(String(lg[2]), cx + 88, ty);
+          doc.setFont('helvetica', 'normal');
+          doc.rect(cx, y - 3.8, 4, 4);            /* case a cocher production */
+          doc.text(fabLabelCourt(lg[0], 36), cx + 5, y);
+          doc.text(String(lg[1]), cx + 68, y);
+          doc.text(String(lg[2]), cx + 88, y);
         }
-        ty += 3.6;
+        y += 6.2;
       }
-      /* séparateur vertical entre les 2 colonnes */
+      /* separateur vertical entre les 2 colonnes */
       doc.setDrawColor(150); doc.setLineWidth(0.2);
-      doc.line(103.6, headY - 2.5, 103.6, ty - 1.5);
+      doc.line(MX + 94, headY - 4, MX + 94, y - 3);
       doc.setLineWidth(0.3); doc.setDrawColor(60);
-      ty += 1.5;
+      y += 2;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
       for (var vi = 0; vi < d.rows.vitrages.length; vi++) {
         var vg = d.rows.vitrages[vi];
-        doc.setFont('helvetica', 'bold');
-        doc.text(vg.label + ' : ' + r1(vg.w) + ' x ' + r1(vg.h) + (vg.remp ? '' : '  (' + d.vitrage + ')') + (vg.traverses ? '  AVEC TRAVERSES' : ''), 10, ty);
-        ty += 4;
+        doc.text(vg.label + ' : ' + r1(vg.w) + ' x ' + r1(vg.h) + (vg.remp ? '' : '  (' + d.vitrage + ')') + (vg.traverses ? '  AVEC TRAVERSES' : ''), MX, y);
+        y += 6;
       }
     } else if (d.cfg.tel) {
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5);
-      doc.text('Table de découpe : à compléter (formules télescopique en cours de validation)', 10, ty); ty += 4.5;
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(10.5);
+      doc.text('Table de decoupe : a completer (formules telescopique en cours de validation)', MX, y); y += 5.5;
     }
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    if (d.raidisseur) { doc.text('Raidisseur : ' + d.raidisseur, 10, ty); ty += 3.8; }
-    if (val('notes')) { doc.text('Notes : ' + val('notes'), 10, ty); ty += 3.8; }
+    y += 3;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+    if (val('notes')) { doc.text('Notes : ' + val('notes'), MX, y); y += 6; }
     for (var k2 = 0; k2 < state.toles.length; k2++) {
       var tl2 = state.toles[k2];
       var nom2 = tl2.type === 'plat' ? 'Tole plat' : tl2.type === 'corniere' ? 'Tole corniere' : 'Tole U';
       var dims2 = tl2.larg + (tl2.aile1 ? ' x ' + tl2.aile1 : '') + (tl2.aile2 ? ' x ' + tl2.aile2 : '');
-      doc.text('Habillage : ' + nom2 + ' ' + dims2 + ' x ' + tl2.lg + ((tl2.qty || 1) > 1 ? ' x ' + (tl2.qty || 1) : ''), 10, ty); ty += 3.8;
+      doc.text('Habillage : ' + nom2 + ' ' + dims2 + ' x ' + tl2.lg + ((tl2.qty || 1) > 1 ? ' x ' + (tl2.qty || 1) : ''), MX, y); y += 6;
     }
-    doc.setFont('helvetica', 'bold'); doc.text('Accessoires :', 10, ty); ty += 3.8;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('Accessoires :', MX, y); y += 6.5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
     var accLine = [];
     for (var a = 0; a < d.accessoires.length; a++) if (d.accessoires[a][1] > 0) accLine.push(d.accessoires[a][0] + ' x' + d.accessoires[a][1]);
-    var accLines = doc.splitTextToSize(accLine.join('  |  '), W - 20);
-    for (var al = 0; al < accLines.length; al++) { doc.text(accLines[al], 10, ty); ty += 3.8; }
+    var accLines = doc.splitTextToSize(accLine.join('   |   '), W - 2 * MX);
+    for (var al = 0; al < accLines.length; al++) { doc.text(accLines[al], MX, y); y += 6; }
     if (state.historique && state.historique.length) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
-      doc.text('Historique des modifications :', 10, ty); ty += 3.4;
-      doc.setFont('helvetica', 'normal');
+      y += 2;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+      doc.text('Historique des modifications :', MX, y); y += 5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
       var hist = state.historique.slice(-5);
       for (var h = 0; h < hist.length; h++) {
         var ligne = hist[h].d + '  ' + hist[h].c + ' : ' + hist[h].a + ' -> ' + hist[h].n;
-        var lw = doc.splitTextToSize(ligne, W - 20);
-        doc.text(lw[0], 10, ty); ty += 3.2;
+        var lw = doc.splitTextToSize(ligne, W - 2 * MX);
+        doc.text(lw[0], MX, y); y += 4.5;
       }
     }
+
+    /* ==================== VERSO : schema ==================== */
+    doc.addPage();
+    var vy = 12;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text('SCHEMA', W / 2, vy, { align: 'center' }); vy += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text(d.client + (d.lieu ? ' - ' + d.lieu : '') + '   |   Ref : ' + d.ref + '   |   ' + fabTypeCourt(d.cfg.label), W / 2, vy, { align: 'center' }); vy += 4;
+    doc.setLineWidth(0.4); doc.setDrawColor(60); doc.line(MX, vy, W - MX, vy); vy += 6;
+    var imgData = $('cv').toDataURL('image/jpeg', 0.92);
+    var imgW = W - 2 * MX;
+    var imgH = imgW * ($('cv').height / $('cv').width);
+    if (vy + imgH > 278) { imgH = 278 - vy; imgW = imgH * ($('cv').width / $('cv').height); }
+    doc.addImage(imgData, 'JPEG', (W - imgW) / 2, vy, imgW, imgH);
+    vy += imgH + 7;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5);
+    doc.text('Porte ' + (i + 1) + ' / ' + portes.length + '   -   schema du releve', W / 2, vy, { align: 'center' });
   }
   current = 0; applyPorte(portes[0]); generer();
   try{ biblioUploadPdf(doc, 'Fiche_fabrication_' + nom + '.pdf'); }catch(e){}
