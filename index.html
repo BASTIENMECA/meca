@@ -2513,10 +2513,11 @@ function fabRows(o) {
     var vHe = r1(HTe - 190);
     out.lignes.push(['', '', 0]);
     out.lignes.push(['DORMANT EXTERIEUR (coupe +20)', r1(HTe + 20), 2]);
-    out.lignes.push(['TRAVERSE 168 (coupe +20)', r1(LTe - 40), 1]);
+    /* PAS de ligne 'traverse' : le raidisseur 168 EST cette piece (meme profil, meme longueur).
+       Il est sorti par ajouterProfilSup() a la longueur de la baie. */
     out.lignes.push(['MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
     capots.push(['CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['CLOSOIR traverse 168 (coupe +20)', r1(LTe - 40), 1]);
+    capots.push(['CLOSOIR raidisseur 168', r1(LTe), 1]);
     capots.push(['CLOSOIR passage libre', oo.PL || 0, 1]);
     if (g > 0) {
       out.lignes.push(['PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
@@ -2540,17 +2541,12 @@ function fabRows(o) {
     out.lignes = [
       ['PF 32.1 MONTANT', hv, 2 * nb],
       ['PF 32.2 TRAVERSE', r1(v - 80), 2 * nb],
-      ['PF 32.3 LABYRINTHE', hv, nb],
-      ['PF 32.88 BROSSE RIGIDE H10', r1(v - 17), nb],
-      ['PF 32.81 JOINT CENTRAL', hv, nb],
-      ['PF 32.86 BROSSE SOUPLE H6', hv, nb],
-      ['PF 32.87 BROSSE SOUPLE H11', hv, nb],
-      ['PF 32.91 EQUERRE INTERNE', '', 4 * nb],
-      ['PF 32.93 KIT FIXATION CHARIOT', '', nb],
-      ['PF 32.94 KIT VIS ASSEMBLAGE', '', nb],
-      ['PF 32.89 GUIDE DROIT', '', nb],
-      ['PF 32.90 GUIDE GAUCHE', '', nb]
+      ['PF 32.3 LABYRINTHE', hv, nb]
     ];
+    /* Retires du tableau de decoupe (demande Bastien 05/11/2026) : 32.91 equerres,
+       32.92/32.93/32.94 kits, 32.89/32.90 guides, 32.81 joint central, 32.86/32.87
+       brosses, 32.88 brosse rigide, 32.84/32.85 joints de vitrage.
+       Ce sont des fournitures de MONTAGE : elles se coupent sur site, sans cote. */
     /* Pas de PF32.6 fourrure U 35x20 : elle ne sert que pour des fixes realises en
        serie 30, ce que SNAF ne fait pas (les fixes sont en profils ARCELOR).
        Retiree dans tous les cas (demande Bastien, 05/11/2026). */
@@ -2561,7 +2557,7 @@ function fabRows(o) {
        Longueur = perimetre du vitrage + 3 mm par cote (formule onglet P57A1). */
     var lv = r1(v - 52), hvS = r1(hv - 62);
     var perimJoint = r1(((lv + 3) * 2) + ((hvS + 3) * 2));
-    out.lignes.push([o.dv30 ? 'PF 32.85 JOINT DOUBLE VITRAGE 23mm' : 'PF 32.84 JOINT VITRAGE FEUILLETE 8/11', perimJoint, nb]);
+    /* joint de vitrage PF32.84/85 : montage, pas de decoupe -> non sorti au tableau */
     /* MECANISME — pieces SNAF qui ne dependent pas de la serie de vantaux
        (identiques a la fiche Twenty) : L fixe, supports de cellule, rail encastre. */
     out.lignes.push(['', '', 0]);
@@ -2616,7 +2612,7 @@ function fabRows(o) {
     }
     /* sortie des capots, a la piece */
     for (var cj = 0; cj < capots.length; cj++) out.lignes.push(capots[cj]);
-    ajouterProfilSup(!ens168);
+    ajouterProfilSup(true);
     return out;
   }
   if (tel2) {
