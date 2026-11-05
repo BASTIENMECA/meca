@@ -1,6 +1,6 @@
 /* Service worker SNAF Cotes — réseau d'abord, autonettoyant.
    Le cache ne sert que de secours hors-ligne. Les /api/* ne sont jamais interceptés. */
-const CACHE = 'snaf-cotes-v7';
+const CACHE = 'snaf-cotes-v8';
 const STATIC = ['./', './index.html'];
 
 self.addEventListener('install', function (e) {

@@ -2512,20 +2512,20 @@ function fabRows(o) {
     var vLe = r1(largFixe - dedExtE - 38 - 14);
     var vHe = r1(HTe - 190);
     out.lignes.push(['', '', 0]);
-    out.lignes.push(['ENSEMBLE 168 — DORMANT EXTERIEUR (coupe +20)', r1(HTe + 20), 2]);
-    out.lignes.push(['ENSEMBLE 168 — TRAVERSE 168 (coupe +20)', r1(LTe - 40), 1]);
-    out.lignes.push(['ENSEMBLE 168 — MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['ENSEMBLE 168 — CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['ENSEMBLE 168 — CLOSOIR traverse 168 (coupe +20)', r1(LTe - 40), 1]);
-    capots.push(['ENSEMBLE 168 — CLOSOIR passage libre', oo.PL || 0, 1]);
+    out.lignes.push(['DORMANT EXTERIEUR (coupe +20)', r1(HTe + 20), 2]);
+    out.lignes.push(['TRAVERSE 168 (coupe +20)', r1(LTe - 40), 1]);
+    out.lignes.push(['MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
+    capots.push(['CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
+    capots.push(['CLOSOIR traverse 168 (coupe +20)', r1(LTe - 40), 1]);
+    capots.push(['CLOSOIR passage libre', oo.PL || 0, 1]);
     if (g > 0) {
-      out.lignes.push(['ENSEMBLE 168 — PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
-      out.lignes.push(['ENSEMBLE 168 — PARCLOSE HORIZONTALE G', r1(vLe + 14), 2]);
+      out.lignes.push(['PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
+      out.lignes.push(['PARCLOSE HORIZONTALE G', r1(vLe + 14), 2]);
       out.vitrages.push({ label: 'Vitrage fixe GAUCHE', w: vLe, h: vHe, traverses: false, remp: false });
     }
     if (d > 0) {
-      out.lignes.push(['ENSEMBLE 168 — PARCLOSE VERTICALE D', r1(vHe - 30), 1]);
-      out.lignes.push(['ENSEMBLE 168 — PARCLOSE HORIZONTALE D', r1(vLe + 14), 2]);
+      out.lignes.push(['PARCLOSE VERTICALE D', r1(vHe - 30), 1]);
+      out.lignes.push(['PARCLOSE HORIZONTALE D', r1(vLe + 14), 2]);
       out.vitrages.push({ label: 'Vitrage fixe DROITE', w: vLe, h: vHe, traverses: false, remp: false });
     }
     /* caisson en applique sur la traverse : la hauteur de passage doit tenir sous HT - 146 */
