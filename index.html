@@ -2416,14 +2416,16 @@ function r1(x) { return Math.round(x * 10) / 10; }
 /* PURE START — fabRows(type, cotes) -> { lignes:[lib,lg,qty], vantaux[], vantail, hv, vitrageL, vitrageH, chassisL, chassisH, vitrages:[{label,w,h,traverses,remp}] }
    type: 'twenty' | 'fixe' | 'tel' — fixes[] et imposte{ h } ajoutent leurs decoupes ; le RAIL est un profil (non laque) */
 function fabRows(o) {
+  /* Allonge de coupe (laquage a retirer au montage) : 10 mm (regle Bastien 05/11/2026, etait 20) */
+  var ALG = 10;
   var out = { lignes: [], vantaux: [], vantail: 0, hv: 0, vitrageL: null, vitrageH: null, chassisL: 0, chassisH: 0, vitrages: [] };
   /* Raidisseur + tubes ajoutes au tableau de decoupe (demande Bastien 21/09/2026).
      avecRaid=false pour un chassis fixe (pas de caisson). */
   function ajouterProfilSup(avecRaid) {
     if (avecRaid && o.raidisseur && o.raidisseur !== '0' && out.lignes && out.lignes.length) {
       /* raidisseur 168 : longueur = longueur de la baie (regle Bastien 05/11/2026) */
-      /* raidisseur 168 = la traverse de l'ensemble : coupe = baie - 60 + 20 (allonge laquage) */
-      var rl = /168/.test(String(o.raidisseur || '')) ? r1((o.baieL || 0) - 40) : (o.raidLg || (o.miniMec || 0));
+      /* raidisseur 168 = la traverse de l'ensemble : coupe = baie - 60 + 10 (allonge laquage) */
+      var rl = /168/.test(String(o.raidisseur || '')) ? r1((o.baieL || 0) - 60 + 10) : (o.raidLg || (o.miniMec || 0));
       if (o.raidisseur === 'Tube 200x50') out.lignes.push(['RAIDISSEUR TUBE 100x50', rl, 2]);
       else out.lignes.push(['RAIDISSEUR ' + String(o.raidisseur).toUpperCase(), rl, 1]);
     }
@@ -2440,16 +2442,16 @@ function fabRows(o) {
     var fixe30 = /30/.test(String(o.serie || ''));
     if (fixe30) {
       /* chassis fixe SERIE 30 = profils FIXE ARCELOR (regles validees 16/10/2026)
-         closoirs : 38 mm par cote au lieu de 30, capot 8 mm (coupe +20) */
+         closoirs : 38 mm par cote au lieu de 30, capot 8 mm (coupe +10) */
       var nCapF = o.closoirs ? 2 : 0;
       var dedF = (o.closoirs ? 38 + 38 : 30 + 30);
       out.lignes = [
-        ['FIXE ARCELOR — DORMANT 45° LARG (coupe +20)', CL + 20, 2],
-        ['FIXE ARCELOR — DORMANT 45° HAUT (coupe +20)', CH + 20, 2],
+        ['FIXE ARCELOR — DORMANT 45° LARG (coupe +10)', CL + ALG, 2],
+        ['FIXE ARCELOR — DORMANT 45° HAUT (coupe +10)', CH + ALG, 2],
         ['FIXE ARCELOR — PARCLOSE HAUT/BAS', r1(CL - 60 - 8 * nCapF), 2],
         ['FIXE ARCELOR — PARCLOSE COTES', r1(CH - 104), 2]
       ];
-      if (nCapF) out.lignes.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20)', CH + 20, nCapF]);
+      if (nCapF) out.lignes.push(['FIXE ARCELOR — CAPOT 8mm (coupe +10)', CH + ALG, nCapF]);
       out.vitrageL = r1(CL - dedF - 14); out.vitrageH = r1(CH - 74);
       out.vitrages.push({ label: 'Vitrage chassis', w: r1(CL - dedF - 14), h: r1(CH - 74), traverses: false, remp: false });
       ajouterProfilSup(false);
@@ -2513,12 +2515,12 @@ function fabRows(o) {
     var vLe = r1(largFixe - dedExtE - 38 - 14);
     var vHe = r1(HTe - 190);
     out.lignes.push(['', '', 0]);
-    out.lignes.push(['DORMANT EXTERIEUR (coupe +20)', r1(HTe + 20), 2]);
+    out.lignes.push(['DORMANT EXTERIEUR (coupe +10)', r1(HTe + ALG), 2]);
     /* PAS de ligne 'traverse' : le raidisseur 168 EST cette piece (meme profil, meme longueur).
        Il est sorti par ajouterProfilSup() a la longueur de la baie. */
-    out.lignes.push(['MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['CLOSOIR raidisseur 168 (coupe +20)', r1(LTe - 40), 1]);
+    out.lignes.push(['MONTANT INTERMEDIAIRE (coupe +10)', r1(HTe - 146 + ALG), 2]);
+    capots.push(['CAPOT 8mm cote trou (coupe +10)', r1(HTe - 146 + ALG), 2]);
+    capots.push(['CLOSOIR raidisseur 168 (coupe +10)', r1(LTe - 60 + ALG), 1]);
     capots.push(['CLOSOIR passage libre', oo.PL || 0, 1]);
     if (g > 0) {
       out.lignes.push(['PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
@@ -2588,11 +2590,11 @@ function fabRows(o) {
            Deduction par cote : 30 mm sans capot, 38 mm avec capot (30 + 8). */
         var nCapots = o.closoirs ? 2 : 1;
         out.lignes.push(['', '', 0]);
-        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +20) ' + sideS, r1(fws + 20), 2);
-        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +20) ' + sideS, r1(fhs + 20), 2);
+        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +10) ' + sideS, r1(fws + ALG), 2);
+        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +10) ' + sideS, r1(fhs + ALG), 2);
         ligneS30(out, 'FIXE ARCELOR — PARCLOSE HAUT/BAS ' + sideS, r1(fws - 60 - 8 * nCapots), 2);
         ligneS30(out, 'FIXE ARCELOR — PARCLOSE COTES ' + sideS, r1(fhs - 104), 2);
-        capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20) ' + sideS, r1(fhs + 20), nCapots]);
+        capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +10) ' + sideS, r1(fhs + ALG), nCapots]);
         var dedFixe = (o.closoirs ? 38 + 38 : 38 + 30) + 14;
         var rempFS = fxs.fill && fxs.fill !== 'verre';
         out.vitrages.push({ label: (rempFS ? 'Remplissage fixe ' : 'Vitrage fixe ') + (fxs.side === 'G' ? 'G' : 'D') + (rempFS ? ' (tole laquee)' : ''), w: r1(fws - dedFixe), h: r1(fhs - 74), traverses: avecTravS, remp: rempFS });
@@ -2603,11 +2605,11 @@ function fabRows(o) {
       var iws = o.baieL || 0, ihs = o.imposte.h;
       var nCapImp = o.closoirs ? 2 : 0;
       out.lignes.push(['', '', 0]);
-      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +20) IMPOSTE', r1(iws + 20), 2);
-      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +20) IMPOSTE', r1(ihs + 20), 2);
+      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +10) IMPOSTE', r1(iws + ALG), 2);
+      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +10) IMPOSTE', r1(ihs + ALG), 2);
       ligneS30(out, 'FIXE ARCELOR — PARCLOSE HAUT/BAS IMPOSTE', r1(iws - 60 - 8 * nCapImp), 2);
       ligneS30(out, 'FIXE ARCELOR — PARCLOSE COTES IMPOSTE', r1(ihs - 104), 2);
-      if (nCapImp) capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20) IMPOSTE', r1(ihs + 20), nCapImp]);
+      if (nCapImp) capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +10) IMPOSTE', r1(ihs + ALG), nCapImp]);
       var dedImp = (o.closoirs ? 38 + 38 : 30 + 30) + 14;
       out.vitrages.push({ label: 'Vitrage imposte', w: r1(iws - dedImp), h: r1(ihs - 74), traverses: false, remp: false });
     }
