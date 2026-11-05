@@ -346,6 +346,25 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
       <option value="Twenty" selected>Twenty</option>
       <option value="Serie 30">Serie 30</option>
     </select>
+    <div id="dv30Box" style="display:none;margin-top:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal">
+        <input type="checkbox" id="dv30" onchange="if(typeof updateCalc==='function')updateCalc()">
+        Double vitrage ou SP15 <span class="hint" style="font-weight:normal">(Serie 30 — coche = joint gros vitrage)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal;margin-top:6px">
+        <input type="checkbox" id="closoirs" onchange="if(typeof updateCalc==='function')updateCalc()">
+        Closoirs 8 mm partout <span class="hint" style="font-weight:normal">(la jonction porte / fixe est capotee d'office)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal;margin-top:6px">
+        <input type="checkbox" id="ensTraverse" onchange="majEnsTraverse()">
+        Ensemble avec traverse 168 <span class="hint" style="font-weight:normal">(2 fixes + trou au milieu, chassis fixe)</span>
+      </label>
+      <div id="ensTraverseBox" style="display:none;margin-top:6px">
+        <label style="font-weight:normal">Largeur du trou (mm)&nbsp;
+          <input id="trouLg" type="number" inputmode="numeric" placeholder="ex : 1400" style="width:110px" oninput="if(typeof updateCalc==='function')updateCalc()">
+        </label>
+        <div class="hint" style="font-weight:normal">Trou = emplacement de la porte. Largeur et hauteur de baie = dimensions totales de l'ensemble.</div>
+      </div>
     <div id="calcBox" class="calc"></div>
   </div>
 
@@ -405,6 +424,7 @@ body.dark .chip, body.dark .catBtn { border: 1.5px solid #1e7d46 !important; col
       <option value="Tube 120x40">Tube 120x40</option>
       <option value="Tube 200x50">Tube 200x50</option>
       <option value="Raidisseur 100*20">Raidisseur 100*20</option>
+      <option value="168">Raidisseur 168 — ensemble menuise</option>
     </select>
     <div id="raidisseurLgBox" style="display:none">
       <label>Longueur raidisseur (mm) — vide = longueur du caisson</label>
@@ -1043,6 +1063,11 @@ function optionsListe() {
 var portes = [];
 var current = 0;
 
+function majEnsTraverse() {
+  $('ensTraverseBox').style.display = $('ensTraverse').checked ? '' : 'none';
+  if (typeof updateCalc === 'function') updateCalc();
+}
+
 function snapshotPorte() {
   return {
     ref: $('porteRef').value,
@@ -1060,7 +1085,7 @@ function snapshotPorte() {
     options: optionsListe(),
     accessoires: accessoiresListe(), livraison: $('livraison').value,
     baieLocked: state.baieLocked,
-    serie: $('serie').value, vitrage: $('vitrage').value, couleur: $('couleur').value, teleQty: $('teleQty').value, raidisseurLg: $('raidisseurLg').value,
+    serie: $('serie').value, dv30: $('dv30').checked, closoirs: $('closoirs').checked, ensTraverse: $('ensTraverse').checked, trouLg: $('trouLg').value, vitrage: $('vitrage').value, couleur: $('couleur').value, teleQty: $('teleQty').value, raidisseurLg: $('raidisseurLg').value,
     raidisseur: $('raidisseur').value, railSol: $('railSolChk').checked, toles: JSON.parse(JSON.stringify(state.toles)),
     tubes: JSON.parse(JSON.stringify(state.tubes || [])),
     notes: $('notes').value
@@ -1127,6 +1152,12 @@ function applyPorte(snap) {
   });
   $('livraison').value = snap.livraison || '';
   $('serie').value = snap.serie || 'Twenty';
+  $('dv30').checked = !!snap.dv30;
+  $('closoirs').checked = !!snap.closoirs;
+  $('ensTraverse').checked = !!snap.ensTraverse;
+  $('trouLg').value = snap.trouLg || '';
+  $('dv30Box').style.display = ($('serie').value === 'Serie 30') ? '' : 'none';
+  $('ensTraverseBox').style.display = $('ensTraverse').checked ? '' : 'none';
   $('teleQty').value = snap.teleQty || '1';
   $('teleQtyBox').style.display = (snap.options || []).indexOf('Telecommande') >= 0 ? 'flex' : 'none';
   state.baieLocked = !!snap.baieLocked;
@@ -1282,6 +1313,11 @@ function init() {
   document.addEventListener('DOMContentLoaded', chargerReleveEmbarque);
   $('baieH').addEventListener('input', updateCalc);
   $('caisH').addEventListener('input', updateCalc);
+  $('serie').addEventListener('change', function () {
+    $('dv30Box').style.display = (this.value === 'Serie 30') ? '' : 'none';
+    if (typeof updateCalc === 'function') updateCalc();
+  });
+  $('dv30Box').style.display = ($('serie').value === 'Serie 30') ? '' : 'none';
   $('cv').addEventListener('click', function (e) {
     if (schemaFullVisible() && zMoved) { zMoved = false; return; }
     var rect = $('cv').getBoundingClientRect();
@@ -1719,6 +1755,25 @@ function fixeOk() {
 function fixeCancel() { $('fixePanel').style.display = 'none'; fixeIdx = null; }
 
 /* dessin des traverses + vitrages sur un fixe */
+/* Serie 30 : les closoirs (capots 8 mm) sont representes en ROUGE sur le croquis.
+   Jonction porte/fixe = toujours capotee ; le bouton "closoirs partout" ajoute
+   le capot sur le cote exterieur. */
+function serie30On() { try { return /30/.test(String($('serie').value)); } catch (e) { return false; } }
+function closoirsPartout() { try { return !!$('closoirs').checked; } catch (e) { return false; } }
+function dessinerClosoirs(ctx, x, fy, fw, fh, sc, coteJonction) {
+  var cw = Math.max(2, 8 * sc);
+  ctx.save();
+  ctx.fillStyle = '#c62828';
+  if (coteJonction === 'D') {
+    ctx.fillRect(x + fw - cw, fy, cw, fh);          /* jonction a droite */
+    if (closoirsPartout()) ctx.fillRect(x, fy, cw, fh);
+  } else {
+    ctx.fillRect(x, fy, cw, fh);                    /* jonction a gauche */
+    if (closoirsPartout()) ctx.fillRect(x + fw - cw, fy, cw, fh);
+  }
+  ctx.restore();
+}
+
 function dessinerFixe(ctx, f, fx, fy, fw, fh, sc) {
   var tv = f.tv || [], th = f.th || [];
   ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 1.5;
@@ -2117,6 +2172,7 @@ function draw() {
   ctx.strokeRect(xStart, yDoor, totalW * scale, doorH);
 
   var x = xStart;
+  var capotsDessin = [];
   /* fixes gauche */
   state.fixes.forEach(function (f) {
     if (f.side !== 'G') return;
@@ -2130,6 +2186,7 @@ function draw() {
     ctx.fillStyle = '#1a1a2e'; ctx.font = '18px Arial';
     ctx.fillText('fixe ' + f.w, x + fw / 2, fy + 26);
     dessinerFixe(ctx, f, x, fy, fw, fh, scale);
+    if (serie30On()) capotsDessin.push([x, fy, fw, fh, 'JONCTION']);
     x += fw;
   });
   /* vantaux — largeurs calculees depuis le passage libre (regle Bastien) :
@@ -2175,8 +2232,42 @@ function draw() {
     ctx.fillStyle = '#1a1a2e'; ctx.font = '18px Arial';
     ctx.fillText('fixe ' + f.w, x + fw / 2, fy + 26);
     dessinerFixe(ctx, f, x, fy, fw, fh, scale);
+    if (serie30On()) capotsDessin.push([x, fy, fw, fh, 'JONCTION']);
     x += fw;
   });
+
+  /* closoirs serie 30 : peints en dernier pour rester visibles par-dessus les vantaux */
+  for (var cpi = 0; cpi < capotsDessin.length; cpi++) {
+    dessinerClosoirs(ctx, capotsDessin[cpi][0], capotsDessin[cpi][1], capotsDessin[cpi][2], capotsDessin[cpi][3], scale, (capotsDessin[cpi][0] < xStart + totalW * scale / 2 ? 'D' : 'G'));
+  }
+
+  /* ===== ENSEMBLE 168 : cadre menuise (vue de face) =====
+     Seuls les montants verticaux sont visibles : la traverse 168 est derriere le caisson,
+     et les dormants remplacent les dormants des fixes. On dessine donc les 4 montants
+     (2 dormants exterieurs + 2 montants encadrant le passage) et les capots en rouge. */
+  var ensDessin = /168/.test(String(($('raidisseur') || {}).value || '')) && state.fixes.length > 0 && cfg.open !== 'fixe';
+  if (ensDessin) {
+    var eB2 = yDoor + doorH;
+    var dW2 = Math.max(3, 30 * scale);
+    var mGx2 = xStart + (fixG || 0) * scale;
+    var mDx2 = xStart + ((fixG || 0) + PL) * scale - dW2;
+    ctx.save();
+    ctx.fillStyle = '#c9d6e2'; ctx.strokeStyle = '#2b6cb0'; ctx.lineWidth = 1.2;
+    ctx.fillRect(xStart, yDoor, dW2, doorH);
+    ctx.strokeRect(xStart, yDoor, dW2, doorH);
+    ctx.fillRect(xStart + totalW * scale - dW2, yDoor, dW2, doorH);
+    ctx.strokeRect(xStart + totalW * scale - dW2, yDoor, dW2, doorH);
+    if (fixG > 0) { ctx.fillRect(mGx2, yDoor, dW2, doorH); ctx.strokeRect(mGx2, yDoor, dW2, doorH); }
+    if (fixD > 0) { ctx.fillRect(mDx2, yDoor, dW2, doorH); ctx.strokeRect(mDx2, yDoor, dW2, doorH); }
+    /* capots 8 mm cote passage */
+    var cwE2 = Math.max(2, 8 * scale);
+    ctx.fillStyle = '#c62828';
+    if (fixG > 0) ctx.fillRect(mGx2 + dW2 - cwE2, yDoor, cwE2, doorH);
+    if (fixD > 0) ctx.fillRect(mDx2, yDoor, cwE2, doorH);
+    ctx.fillStyle = '#2b6cb0'; ctx.font = 'bold 9px Arial'; ctx.textAlign = 'left';
+    ctx.fillText('ENSEMBLE 168', xStart, yDoor + doorH + 34);
+    ctx.restore();
+  }
 
   /* sol */
   ctx.strokeStyle = '#777'; ctx.lineWidth = 3;
@@ -2353,6 +2444,50 @@ function fabRows(o) {
   if (o.type === 'fixe') {
     var CL = o.baieL || 0, CH = o.baieH || 0;
     out.chassisL = CL; out.chassisH = CH;
+    var fixe30 = /30/.test(String(o.serie || ''));
+    if (fixe30 && o.ensTraverse && o.trouLg > 0 && o.trouLg < CL) {
+      /* ENSEMBLE 2 FIXES + TRAVERSE 168 (regles validees par Bastien le 16/10/2026,
+         onglet "Ensemble traverse" du Sheet SNAF Cotes profils fixe).
+         Dormants exterieurs toute hauteur + traverse entre les 2 dormants
+         + 2 montants intermediaires qui delimitent le trou de la porte. */
+      var LT = CL, HT = CH, trou = o.trouLg;
+      var largFixe = r1((LT - trou) / 2 - 30);
+      var dedExt = o.closoirs ? 38 : 30;
+      var vL = r1(largFixe - dedExt - 38 - 14);
+      var vH = r1(HT - 190);
+      out.lignes = [
+        ['FIXE ARCELOR — DORMANT EXTERIEUR (coupe +20)', r1(HT + 20), 2],
+        ['FIXE ARCELOR — TRAVERSE 168 (coupe +20)', r1(LT - 40), 1],
+        ['FIXE ARCELOR — MONTANT INTERMEDIAIRE (coupe +20)', r1(HT - 126), 2],
+        ['FIXE ARCELOR — CAPOT 8mm (coupe +20, cote trou)', r1(HT - 126), 2],
+        ['ENSEMBLE 168 — CLOSOIR traverse 168 (coupe +20)', r1(LT - 40), 1],
+        ['ENSEMBLE 168 — CLOSOIR passage libre', r1(trou), 1],
+        ['FIXE ARCELOR — PARCLOSE VERTICALE', r1(vH - 30), 2],
+        ['FIXE ARCELOR — PARCLOSE HORIZONTALE', r1(vL + 14), 4]
+      ];
+      out.vitrageL = vL; out.vitrageH = vH;
+      out.vitrages.push({ label: 'Vitrage fixe GAUCHE', w: vL, h: vH, traverses: false, remp: false });
+      out.vitrages.push({ label: 'Vitrage fixe DROITE', w: vL, h: vH, traverses: false, remp: false });
+      ajouterProfilSup(false);
+      return out;
+    }
+    if (fixe30) {
+      /* chassis fixe SERIE 30 = profils FIXE ARCELOR (regles validees 16/10/2026)
+         closoirs : 38 mm par cote au lieu de 30, capot 8 mm (coupe +20) */
+      var nCapF = o.closoirs ? 2 : 0;
+      var dedF = (o.closoirs ? 38 + 38 : 30 + 30);
+      out.lignes = [
+        ['FIXE ARCELOR — DORMANT 45° LARG (coupe +20)', CL + 20, 2],
+        ['FIXE ARCELOR — DORMANT 45° HAUT (coupe +20)', CH + 20, 2],
+        ['FIXE ARCELOR — PARCLOSE HAUT/BAS', r1(CL - 60 - 8 * nCapF), 2],
+        ['FIXE ARCELOR — PARCLOSE COTES', r1(CH - 104), 2]
+      ];
+      if (nCapF) out.lignes.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20)', CH + 20, nCapF]);
+      out.vitrageL = r1(CL - dedF - 14); out.vitrageH = r1(CH - 74);
+      out.vitrages.push({ label: 'Vitrage chassis', w: r1(CL - dedF - 14), h: r1(CH - 74), traverses: false, remp: false });
+      ajouterProfilSup(false);
+      return out;
+    }
     out.lignes = [
       ['P01587 : LARG DE LA PARCLOSE  - 46', CL - 46, 2],
       ['P01587 : HAUT DE LA PARCLOSE  - 84', CH - 84, 2],
@@ -2386,6 +2521,138 @@ function fabRows(o) {
   else if (nv === 2) { v = o.PL / 2 + 35; out.vantaux = [v, v]; }
   else { v = o.PL / nv; for (var j = 0; j < nv; j++) out.vantaux.push(v); }
   out.vantail = v;
+  /* ---- SERIE 30 (SESAMO PF32) : decoupes reprises du configurateur C210030_02 ----
+     Regles (onglets P57A1 vantail coulissant / P57A2 vantail fixe / P5701 porte complete) :
+       montant PF32.1 = HAS (2 par vantail) ; traverse PF32.2 = LAS - 80 (2 par vantail)
+       labyrinthe PF32.3 = HAS ; brosse rigide PF32.88 = LAS - 17
+       vitrage vantail = LAS - 52 x HAS - 62 ; vitrage fixe = LAF - 43 x HAF - 69
+     Twenty n'est pas touche : branche separee. */
+  var s30 = /30/.test(String(o.serie || '')) && o.type !== 'tel';
+  function ligneS30(out, lib, lg, q) { out.lignes.push([lib, lg, q]); }
+  /* ENSEMBLE MENUISE 168 : des qu'un raidisseur 168 est choisi sur une porte avec des fixes,
+     le montage des parties fixes est le meme QUELLE QUE SOIT LA SERIE DE VANTAUX
+     (dormants exterieurs + traverse 168 + montants intermediaires + capots + closoirs). */
+  function emettreEnsemble168(out, capots, oo, hvV) {
+    var g = 0, d = 0, ng = 0, nd = 0;
+    for (var k = 0; k < (oo.fixes || []).length; k++) {
+      var fk = oo.fixes[k];
+      if (fk.side === 'G') { g += (fk.w || 0); ng++; } else { d += (fk.w || 0); nd++; }
+    }
+    var LTe = oo.baieL || (g + d + (oo.PL || 0));
+    var HTe = oo.baieH || (oo.hvBase || hvV) + 146;
+    var troue = oo.PL || 0;
+    var largFixe = Math.min(r1((LTe - troue) / 2 - 30), ng ? g : Infinity, nd ? d : Infinity);
+    var dedExtE = oo.closoirs ? 38 : 30;
+    var vLe = r1(largFixe - dedExtE - 38 - 14);
+    var vHe = r1(HTe - 190);
+    out.lignes.push(['', '', 0]);
+    out.lignes.push(['ENSEMBLE 168 — DORMANT EXTERIEUR (coupe +20)', r1(HTe + 20), 2]);
+    out.lignes.push(['ENSEMBLE 168 — TRAVERSE 168 (coupe +20)', r1(LTe - 40), 1]);
+    out.lignes.push(['ENSEMBLE 168 — MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
+    capots.push(['ENSEMBLE 168 — CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
+    capots.push(['ENSEMBLE 168 — CLOSOIR traverse 168 (coupe +20)', r1(LTe - 40), 1]);
+    capots.push(['ENSEMBLE 168 — CLOSOIR passage libre', oo.PL || 0, 1]);
+    if (g > 0) {
+      out.lignes.push(['ENSEMBLE 168 — PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
+      out.lignes.push(['ENSEMBLE 168 — PARCLOSE HORIZONTALE G', r1(vLe + 14), 2]);
+      out.vitrages.push({ label: 'Vitrage fixe GAUCHE', w: vLe, h: vHe, traverses: false, remp: false });
+    }
+    if (d > 0) {
+      out.lignes.push(['ENSEMBLE 168 — PARCLOSE VERTICALE D', r1(vHe - 30), 1]);
+      out.lignes.push(['ENSEMBLE 168 — PARCLOSE HORIZONTALE D', r1(vLe + 14), 2]);
+      out.vitrages.push({ label: 'Vitrage fixe DROITE', w: vLe, h: vHe, traverses: false, remp: false });
+    }
+    /* caisson en applique sur la traverse : la hauteur de passage doit tenir sous HT - 146 */
+    var hautDispo = HTe - 146, hautPassage = oo.hvBase || hvV;
+    if (hautPassage > hautDispo) {
+      out.lignes.push(['ALERTE — hauteur totale trop faible : il faut passage + 146 = ' +
+                       Math.round(hautPassage + 146) + ' mm (saisi ' + Math.round(HTe) + ')', '', 0]);
+    }
+  }
+  if (s30) {
+    var nb = o.nv || 1;
+    out.lignes = [
+      ['PF 32.1 MONTANT', hv, 2 * nb],
+      ['PF 32.2 TRAVERSE', r1(v - 80), 2 * nb],
+      ['PF 32.3 LABYRINTHE', hv, nb],
+      ['PF 32.88 BROSSE RIGIDE H10', r1(v - 17), nb],
+      ['PF 32.81 JOINT CENTRAL', hv, nb],
+      ['PF 32.86 BROSSE SOUPLE H6', hv, nb],
+      ['PF 32.87 BROSSE SOUPLE H11', hv, nb],
+      ['PF 32.91 EQUERRE INTERNE', '', 4 * nb],
+      ['PF 32.93 KIT FIXATION CHARIOT', '', nb],
+      ['PF 32.94 KIT VIS ASSEMBLAGE', '', nb],
+      ['PF 32.89 GUIDE DROIT', '', nb],
+      ['PF 32.90 GUIDE GAUCHE', '', nb]
+    ];
+    /* Pas de PF32.6 fourrure U 35x20 : elle ne sert que pour des fixes realises en
+       serie 30, ce que SNAF ne fait pas (les fixes sont en profils ARCELOR).
+       Retiree dans tous les cas (demande Bastien, 05/11/2026). */
+    out.vitrageL = r1(v - 52); out.vitrageH = r1(hv - 62);
+    var rempS30 = /plein|opaque|tole/i.test(o.vitrageTxt || '');
+    out.vitrages.push({ label: rempS30 ? 'Remplissage vantaux (tole laquee)' : 'Vitrage vantaux', w: r1(v - 52), h: r1(hv - 62), traverses: false, remp: rempS30 });
+    /* joints de vitrage : PF32.85 pour double vitrage / SP15, PF32.84 pour vitrages fins.
+       Longueur = perimetre du vitrage + 3 mm par cote (formule onglet P57A1). */
+    var lv = r1(v - 52), hvS = r1(hv - 62);
+    var perimJoint = r1(((lv + 3) * 2) + ((hvS + 3) * 2));
+    out.lignes.push([o.dv30 ? 'PF 32.85 JOINT DOUBLE VITRAGE 23mm' : 'PF 32.84 JOINT VITRAGE FEUILLETE 8/11', perimJoint, nb]);
+    /* MECANISME — pieces SNAF qui ne dependent pas de la serie de vantaux
+       (identiques a la fiche Twenty) : L fixe, supports de cellule, rail encastre. */
+    out.lignes.push(['', '', 0]);
+    var lg324 = r1((o.PL || 0) + 2 * (hv + 5));
+    ligneS30(out, 'PF 32.4 — L.FIXE + 2 SUPPORTS CELLULE (3 pieces)', lg324, 1);
+    if (o.railEnc) ligneS30(out, 'RAIL ENCASTRE (non laque)', o.miniMec || o.PL, 1);
+    /* capots : accumules puis sortis soit a la piece, soit en longueur totale (option) */
+    var capots = [];
+    /* fixes attaches : profils FIXE ARCELOR (regles validees 16/10/2026),
+       PAS les profils de la serie 30 (demande Bastien) */
+    /* ENSEMBLE MENUISE 168 : calcul du mode (helper commun aux deux series) */
+    var fixGm = 0, fixDm = 0;
+    for (var ef = 0; ef < (o.fixes || []).length; ef++) {
+      if (o.fixes[ef].side === 'G') fixGm += (o.fixes[ef].w || 0); else fixDm += (o.fixes[ef].w || 0);
+    }
+    var ens168 = /168/.test(String(o.raidisseur || '')) && (fixGm + fixDm) > 0;
+    if (ens168) {
+      emettreEnsemble168(out, capots, o, hv);
+    } else if (o.fixes && o.fixes.length) {
+      for (var fs = 0; fs < o.fixes.length; fs++) {
+        var fxs = o.fixes[fs];
+        var fws = fxs.w || 0, fhs = fxs.h || o.hvBase || hv;
+        var sideS = fxs.side === 'G' ? 'GAUCHE' : 'DROIT';
+        var avecTravS = (fxs.tv && fxs.tv.length) || (fxs.th && fxs.th.length);
+        /* Closoirs : la jonction porte / chassis fixe est TOUJOURS capotee (8 mm).
+           Le bouton "Closoirs partout" ajoute le capot sur le cote exterieur.
+           Deduction par cote : 30 mm sans capot, 38 mm avec capot (30 + 8). */
+        var nCapots = o.closoirs ? 2 : 1;
+        out.lignes.push(['', '', 0]);
+        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +20) ' + sideS, r1(fws + 20), 2);
+        ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +20) ' + sideS, r1(fhs + 20), 2);
+        ligneS30(out, 'FIXE ARCELOR — PARCLOSE HAUT/BAS ' + sideS, r1(fws - 60 - 8 * nCapots), 2);
+        ligneS30(out, 'FIXE ARCELOR — PARCLOSE COTES ' + sideS, r1(fhs - 104), 2);
+        capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20) ' + sideS, r1(fhs + 20), nCapots]);
+        var dedFixe = (o.closoirs ? 38 + 38 : 38 + 30) + 14;
+        var rempFS = fxs.fill && fxs.fill !== 'verre';
+        out.vitrages.push({ label: (rempFS ? 'Remplissage fixe ' : 'Vitrage fixe ') + (fxs.side === 'G' ? 'G' : 'D') + (rempFS ? ' (tole laquee)' : ''), w: r1(fws - dedFixe), h: r1(fhs - 74), traverses: avecTravS, remp: rempFS });
+      }
+    }
+    /* imposte : profils FIXE ARCELOR (capots seulement si "closoirs partout") */
+    if (o.imposte && o.imposte.h) {
+      var iws = o.baieL || 0, ihs = o.imposte.h;
+      var nCapImp = o.closoirs ? 2 : 0;
+      out.lignes.push(['', '', 0]);
+      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° LARG (coupe +20) IMPOSTE', r1(iws + 20), 2);
+      ligneS30(out, 'FIXE ARCELOR — DORMANT 45° HAUT (coupe +20) IMPOSTE', r1(ihs + 20), 2);
+      ligneS30(out, 'FIXE ARCELOR — PARCLOSE HAUT/BAS IMPOSTE', r1(iws - 60 - 8 * nCapImp), 2);
+      ligneS30(out, 'FIXE ARCELOR — PARCLOSE COTES IMPOSTE', r1(ihs - 104), 2);
+      if (nCapImp) capots.push(['FIXE ARCELOR — CAPOT 8mm (coupe +20) IMPOSTE', r1(ihs + 20), nCapImp]);
+      var dedImp = (o.closoirs ? 38 + 38 : 30 + 30) + 14;
+      out.vitrages.push({ label: 'Vitrage imposte', w: r1(iws - dedImp), h: r1(ihs - 74), traverses: false, remp: false });
+    }
+    /* sortie des capots, a la piece */
+    for (var cj = 0; cj < capots.length; cj++) out.lignes.push(capots[cj]);
+    ajouterProfilSup(!ens168);
+    return out;
+  }
   if (tel2) {
     var hvT = (o.hvBase || 0) + 14;
     out.hv = hvT;
@@ -2422,8 +2689,15 @@ function fabRows(o) {
   var rempV = /plein|opaque|tole/i.test(o.vitrageTxt || '');
   out.vitrages.push({ label: rempV ? 'Remplissage vantaux (tole laquee)' : 'Vitrage vantaux', w: v - 40, h: hv - 121, traverses: false, remp: rempV });
   }
-  /* fixes attaches : meme logique que la fiche chassis fixe (P01768 dormant / P01587 parclose) */
-  if (o.fixes && o.fixes.length) {
+  /* fixes attaches : meme logique que la fiche chassis fixe (P01768 dormant / P01587 parclose).
+     MAIS si un raidisseur 168 est choisi, le montage des fixes est l'ensemble menuise,
+     identique a la serie 30 (demande Bastien 05/11/2026). */
+  var ens168Twenty = /168/.test(String(o.raidisseur || '')) && (o.fixes || []).length > 0;
+  if (ens168Twenty) {
+    var capTw = [];
+    emettreEnsemble168(out, capTw, o, hv);
+    for (var ci2 = 0; ci2 < capTw.length; ci2++) out.lignes.push(capTw[ci2]);
+  } else if (o.fixes && o.fixes.length) {
     for (var fi = 0; fi < o.fixes.length; fi++) {
       var fx = o.fixes[fi];
       var fw = fx.w || 0;
@@ -2449,7 +2723,7 @@ function fabRows(o) {
     out.lignes.push(['P01587 : HAUT PARCLOSE IMPOSTE', ih - 84, 2]);
     out.vitrages.push({ label: 'Vitrage imposte', w: iw - 55, h: ih - 55, traverses: false, remp: false });
   }
-  ajouterProfilSup(true);
+  ajouterProfilSup(!ens168Twenty);
   return out;
 }
 /* PURE END */
@@ -2482,6 +2756,11 @@ function fabData() {
   o.raidisseur = val('raidisseur');
   o.raidLg = num('raidisseurLg') || 0;
   o.tubes = state.tubes || [];
+  o.serie = val('serie') || 'Twenty';
+  o.dv30 = $('dv30').checked;
+  o.closoirs = $('closoirs').checked;
+  o.ensTraverse = $('ensTraverse').checked;
+  o.trouLg = num('trouLg') || 0;
   var rows = fabRows(o);
   var refoul = '';
   if (cfg.open === 'fixe') refoul = '';
