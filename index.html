@@ -1947,9 +1947,12 @@ function updateCalc() {
   /* ENSEMBLE MENUISE (raidisseur 168) : hauteur max de passage dans la baie = HT - 168 + 22 */
   var raid168 = /168/.test(String(($('raidisseur') || {}).value || '')) && state.fixes.length > 0;
   if (raid168 && BH) {
-    var hMax = Math.round(BH - 168 + 22);
-    html += '<br>Hauteur max dans la baie : <b>' + hMax + ' mm</b> (baie - 168 + 22)';
-    if (PH && PH > hMax) html += ' <span style="color:#c62828">— passage trop haut de ' + (PH - hMax) + ' mm</span>';
+    var hSous = Math.round(BH - 168 + 22);            /* hauteur libre sous la traverse */
+    var hCais = num('caisH') || 120;
+    var hPass = Math.round(BH - hCais);               /* hauteur max de passage (caisson en applique) */
+    html += '<br>Hauteur max dans la baie : <b>' + hPass + ' mm</b> (baie - caisson ' + hCais + ')';
+    html += '<br><span class="small">Hauteur libre sous la traverse : ' + hSous + ' mm (baie - 168 + 22)</span>';
+    if (PH && PH + hCais > BH + 5) html += ' <span style="color:#c62828">— passage + caisson = ' + (PH + hCais) + ' mm, il manque ' + (PH + hCais - BH) + ' mm</span>';
   }
   if (c !== null) {
     var baseC = caisson();
@@ -2532,11 +2535,17 @@ function fabRows(o) {
       out.lignes.push(['PARCLOSE HORIZONTALE D', r1(vLe + 14), 2]);
       out.vitrages.push({ label: 'Vitrage fixe DROITE', w: vLe, h: vHe, traverses: false, remp: false });
     }
-    /* caisson en applique sur la traverse : la hauteur de passage doit tenir sous HT - 146 */
-    var hautDispo = HTe - 146, hautPassage = oo.hvBase || hvV;
-    if (hautPassage > hautDispo) {
-      out.lignes.push(['ALERTE — hauteur totale trop faible : il faut passage + 146 = ' +
-                       Math.round(hautPassage + 146) + ' mm (saisi ' + Math.round(HTe) + ')', '', 0]);
+    /* Caisson en APPLIQUE sur la traverse : il se plaque devant elle, donc le vantail
+       passe aussi devant. La seule contrainte reelle est : passage + hauteur de caisson
+       <= hauteur de baie. (Corrige le 05/11/2026 : l'ancien test comparait le passage
+       a HT - 146 et declenchait une fausse alerte sur les portes ou caisson + passage
+       remplissent exactement la baie, ex. 2380 + 120 = 2500.) */
+    var hautPassage = oo.hvBase || hvV;
+    var hCais = Number(oo.caisH) || 120;
+    if (hautPassage + hCais > HTe + 5) {
+      out.lignes.push(['ALERTE — hauteur totale trop faible : passage ' + Math.round(hautPassage) +
+                       ' + caisson ' + hCais + ' = ' + Math.round(hautPassage + hCais) +
+                       ' mm > baie ' + Math.round(HTe) + ' mm', '', 0]);
     }
   }
   if (s30) {
