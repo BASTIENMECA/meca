@@ -2555,6 +2555,9 @@ function fabRows(o) {
       ['PF 32.2 TRAVERSE', r1(v - 80), 2 * nb],
       ['PF 32.3 LABYRINTHE', hv, nb]
     ];
+    /* PF 32.5 PROFIL DE RECEPTION : uniquement sur les portes 1 vantail (onglet P5705).
+       Longueur = hauteur du vantail, 1 piece (a confirmer sur l'onglet si different). */
+    if (nb === 1) out.lignes.push(['PF 32.5 PROFIL DE RECEPTION', hv, 1]);
     /* Retires du tableau de decoupe (demande Bastien 05/11/2026) : 32.91 equerres,
        32.92/32.93/32.94 kits, 32.89/32.90 guides, 32.81 joint central, 32.86/32.87
        brosses, 32.88 brosse rigide, 32.84/32.85 joints de vitrage.
