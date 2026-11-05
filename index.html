@@ -2422,7 +2422,8 @@ function fabRows(o) {
   function ajouterProfilSup(avecRaid) {
     if (avecRaid && o.raidisseur && o.raidisseur !== '0' && out.lignes && out.lignes.length) {
       /* raidisseur 168 : longueur = longueur de la baie (regle Bastien 05/11/2026) */
-      var rl = /168/.test(String(o.raidisseur || '')) ? (o.baieL || o.raidLg || o.miniMec || 0) : (o.raidLg || (o.miniMec || 0));
+      /* raidisseur 168 = la traverse de l'ensemble : coupe = baie - 60 + 20 (allonge laquage) */
+      var rl = /168/.test(String(o.raidisseur || '')) ? r1((o.baieL || 0) - 40) : (o.raidLg || (o.miniMec || 0));
       if (o.raidisseur === 'Tube 200x50') out.lignes.push(['RAIDISSEUR TUBE 100x50', rl, 2]);
       else out.lignes.push(['RAIDISSEUR ' + String(o.raidisseur).toUpperCase(), rl, 1]);
     }
@@ -2517,7 +2518,7 @@ function fabRows(o) {
        Il est sorti par ajouterProfilSup() a la longueur de la baie. */
     out.lignes.push(['MONTANT INTERMEDIAIRE (coupe +20)', r1(HTe - 126), 2]);
     capots.push(['CAPOT 8mm cote trou (coupe +20)', r1(HTe - 126), 2]);
-    capots.push(['CLOSOIR raidisseur 168', r1(LTe), 1]);
+    capots.push(['CLOSOIR raidisseur 168 (coupe +20)', r1(LTe - 40), 1]);
     capots.push(['CLOSOIR passage libre', oo.PL || 0, 1]);
     if (g > 0) {
       out.lignes.push(['PARCLOSE VERTICALE G', r1(vHe - 30), 1]);
